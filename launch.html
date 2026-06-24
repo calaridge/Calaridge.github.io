@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breast Cancer Staging — Launching…</title>
+<style>
+  body{font-family:-apple-system,Arial,sans-serif;display:flex;align-items:center;
+       justify-content:center;height:100vh;margin:0;background:#f0efec;color:#1a1a18}
+  .box{text-align:center;max-width:420px;padding:24px}
+  .spinner{width:32px;height:32px;border:3px solid #ddd;border-top-color:#185fa5;
+           border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .err{color:#791f1f;font-size:13px;text-align:left;background:#fff;border:1px solid #f3c4c4;
+       border-radius:8px;padding:12px;margin-top:16px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="spinner" id="spinner"></div>
+  <p id="status">Connecting to Epic…</p>
+  <div id="errBox" style="display:none"></div>
+</div>
+
+<script src="../src/fhir-client.js"></script>
+<script>
+(async () => {
+  const statusEl = document.getElementById('status');
+  const errBox = document.getElementById('errBox');
+  const spinner = document.getElementById('spinner');
+
+  function showError(msg) {
+    spinner.style.display = 'none';
+    statusEl.textContent = 'Could not connect to Epic.';
+    errBox.style.display = 'block';
+    errBox.className = 'err';
+    errBox.textContent = msg;
+  }
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get('code')) {
+      // Returning from Epic's authorization redirect — exchange code for token
+      statusEl.textContent = 'Finishing sign-in…';
+      await FHIR_CLIENT.handleRedirect();
+      statusEl.textContent = 'Loading patient context…';
+      window.location.assign('../index.html');
+      return;
+    }
+
+    if (params.get('iss') && params.get('launch')) {
+      // Fresh launch from Epic — kick off SMART authorization
+      statusEl.textContent = 'Authorizing with Epic…';
+      await FHIR_CLIENT.launch();
+      return; // browser will redirect away
+    }
+
+    // Neither launch params nor auth code present
+    showError(
+      'This page must be opened from within Epic (Hyperspace) via the ' +
+      'registered SMART app activity — it cannot be opened directly as ' +
+      'a standalone link.\n\nIf you are an Epic analyst testing this app, ' +
+      'launch it through the SMART App Launcher sandbox tool with a valid ' +
+      'iss and launch token.'
+    );
+  } catch (e) {
+    showError(e.message || String(e));
+  }
+})();
+</script>
+</body>
+</html>
