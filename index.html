@@ -21,7 +21,6 @@ select{width:100%;height:34px;padding:0 8px;font-size:13px;background:#f5f5f3;co
 .stage-bar{display:flex;align-items:center;gap:16px;padding:.75rem 1rem;border-radius:8px;background:#f5f5f3}
 .row-end{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px}
 </style>
-<script src="src/fhir-client.js" onerror="console.warn('fhir-client.js not found — running in standalone mode')"></script>
 </head>
 <body>
 <div class="wrap">
@@ -783,9 +782,11 @@ function mapReceptorsToSelect(markers){
 }
 
 async function initEpicIntegration(){
-  // Only attempt FHIR restore if fhir-client.js was loaded (i.e. this is
-  // the Epic-integrated build, not the plain standalone file).
-  if(typeof FHIR_CLIENT==='undefined') return;
+  if(typeof FHIR_CLIENT==='undefined'){
+    document.getElementById('standaloneNotice').style.display='block';
+    document.getElementById('patientBanner').style.display='none';
+    return;
+  }
 
   const authenticated=FHIR_CLIENT.restoreSession();
   if(!authenticated){
