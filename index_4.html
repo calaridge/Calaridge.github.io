@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StageMap — Breast Cancer Staging v2.1</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#f0efec;color:#1a1a18;min-height:100vh;padding:1.5rem 1rem}
+.wrap{max-width:720px;margin:0 auto}
+.card{background:#fff;border:0.5px solid rgba(0,0,0,0.12);border-radius:12px;padding:1.25rem;margin-bottom:1rem}
+.stitle{font-size:10px;font-weight:500;color:#888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
+select{width:100%;height:34px;padding:0 8px;font-size:13px;background:#f5f5f3;color:#1a1a18;border:0.5px solid rgba(0,0,0,0.22);border-radius:8px;font-family:Arial,sans-serif}
+textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;background:#f5f5f3;color:#1a1a18;border:0.5px solid rgba(0,0,0,0.22);border-radius:8px;resize:vertical;line-height:1.5;min-height:72px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.lbl{font-size:11px;color:#555;display:block;margin-bottom:3px}
+.btn{background:#fff;border:0.5px solid rgba(0,0,0,0.22);border-radius:8px;padding:6px 14px;font-size:12px;color:#1a1a18;cursor:pointer;font-family:Arial,sans-serif;white-space:nowrap}
+.btn:hover{background:#f5f5f3}
+.stage-bar{display:flex;align-items:center;gap:16px;padding:.75rem 1rem;border-radius:8px;background:#f5f5f3}
+.row-end{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px}
+.parse-row{display:flex;gap:8px;align-items:flex-start}
+.parse-btns{display:flex;flex-direction:column;gap:6px;padding-top:2px}
+.msg{font-size:11px;color:#555;margin-top:6px;min-height:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v2.1</p>
+
+<div class="card">
+  <div class="stitle">StageMap — Clinical Entry</div>
+  <div class="parse-row">
+    <textarea id="ct" placeholder="Type your case: e.g. Left breast IDC, 2.1 cm, ER positive, PR positive, HER2 negative, upper outer quadrant, grade 2, 1 positive axillary node, 3 cm from nipple"></textarea>
+    <div class="parse-btns">
+      <button class="btn" onclick="parseText()">&#8635; Parse</button>
+      <button class="btn" id="micBtn" onclick="toggleMic()">&#127908; Speak</button>
+    </div>
+  </div>
+  <div class="msg" id="parseMsg"></div>
+</div>
+
+<div class="card">
+  <div class="stitle">TNM Classification</div>
+  <div class="g3">
+    <div><label class="lbl">T &mdash; Tumor</label>
+      <select id="T" onchange="go()">
+        <option value="">&#8212; T &#8212;</option>
+        <option>Tis</option><option>T1mi</option><option>T1a</option><option>T1b</option>
+        <option>T1c</option><option>T2</option><option>T3</option>
+        <option>T4a</option><option>T4b</option><option>T4c</option><option>T4d</option>
+      </select></div>
+    <div><label class="lbl">N &mdash; Nodes</label>
+      <select id="N" onchange="go()">
+        <option value="">&#8212; N &#8212;</option>
+        <option>N0</option><option>N1mi</option><option>N1</option>
+        <option>N2a</option><option>N2b</option><option>N3a</option><option>N3b</option><option>N3c</option>
+      </select></div>
+    <div><label class="lbl">M &mdash; Mets</label>
+      <select id="M" onchange="go()">
+        <option value="">&#8212; M &#8212;</option>
+        <option>M0</option><option>M1</option>
+      </select></div>
+  </div>
+  <div class="g2">
+    <div><label class="lbl">Laterality</label>
+      <select id="lat" onchange="go()">
+        <option value="">&#8212;</option>
+        <option>Left</option><option>Right</option><option>Bilateral</option>
+      </select></div>
+    <div><label class="lbl">Quadrant</label>
+      <select id="quad" onchange="go()">
+        <option value="">&#8212;</option>
+        <option value="UI">Upper inner</option>
+        <option value="UO">Upper outer</option>
+        <option value="LI">Lower inner</option>
+        <option value="LO">Lower outer</option>
+        <option value="C">Central</option>
+      </select></div>
+  </div>
+  <div class="g2">
+    <div><label class="lbl">Grade</label>
+      <select id="grade" onchange="go()">
+        <option value="">&#8212;</option><option>G1</option><option>G2</option><option>G3</option>
+      </select></div>
+    <div><label class="lbl">Receptor Status</label>
+      <select id="recep" onchange="go()">
+        <option value="">&#8212;</option>
+        <option value="LumA">ER+/PR+/HER2-</option>
+        <option value="LumB">ER+/PR+/HER2+</option>
+        <option value="HER2e">ER-/PR-/HER2+</option>
+        <option value="TNBC">Triple negative</option>
+        <option value="ERp">ER+/PR-/HER2-</option>
+      </select></div>
+  </div>
+  <div class="g2">
+    <div><label class="lbl">Tumor size (cm)</label>
+      <select id="size" onchange="go()">
+        <option value="">&#8212;</option>
+        <option value="0.5">0.5</option><option value="1.0">1.0</option>
+        <option value="1.5">1.5</option><option value="2.0">2.0</option>
+        <option value="2.1">2.1</option><option value="2.5">2.5</option>
+        <option value="3.0">3.0</option><option value="3.2">3.2</option>
+        <option value="3.5">3.5</option><option value="4.0">4.0</option>
+        <option value="4.5">4.5</option><option value="5.0">5.0</option>
+      </select></div>
+    <div><label class="lbl">Distance from nipple (cm)</label>
+      <select id="dist" onchange="go()">
+        <option value="">&#8212;</option>
+        <option value="1">1</option><option value="2">2</option>
+        <option value="3">3</option><option value="4">4</option>
+        <option value="5">5</option><option value="6">6</option>
+      </select></div>
+  </div>
+  <div class="g2">
+    <div><label class="lbl">Supraclavicular nodes</label>
+      <select id="scn" onchange="go()">
+        <option value="0">none</option>
+        <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+      </select></div>
+    <div><label class="lbl">Internal mammary nodes</label>
+      <select id="imn" onchange="go()">
+        <option value="0">none</option>
+        <option value="1">1</option><option value="2">2</option>
+        <option value="3">3</option><option value="4">4</option>
+      </select></div>
+  </div>
+</div>
+
+<div class="card" id="stageCard" style="display:none">
+  <div class="stitle">Anatomic Stage &mdash; AJCC 8th Edition</div>
+  <div class="stage-bar">
+    <div id="stageBadge" style="font-size:22px;min-width:100px;font-weight:500"></div>
+    <div id="stageDesc" style="font-size:12px;color:#555;line-height:1.5"></div>
+  </div>
+</div>
+
+<div class="card" id="diagCard" style="display:none">
+  <div class="stitle">Anatomical Diagram &mdash; Patient Facing Provider</div>
+  <div class="row-end">
+    <button class="btn" onclick="printDiag()">Print</button>
+    <button class="btn" onclick="copySVG()">Copy SVG</button>
+  </div>
+  <div id="diagBox"></div>
+  <p style="font-size:10px;color:#aaa;margin-top:8px;border-top:0.5px solid #eee;padding-top:8px">
+    Patient's right = diagram left &middot; AJCC 8th Edition &middot; For clinical documentation only
+  </p>
+</div>
+
+</div>
+<script>
+var SD = {
+  '0':'Carcinoma in situ.',
+  'IA':'Tumor 20mm or less, node-negative.',
+  'IB':'Small tumor with nodal micrometastasis.',
+  'IIA':'Tumor 20-50mm node-negative, or small tumor with 1-3 positive nodes.',
+  'IIB':'Medium-large tumor with limited nodal disease.',
+  'IIIA':'Extensive nodal involvement or large primary with nodes.',
+  'IIIB':'Chest wall or skin involvement, or inflammatory carcinoma.',
+  'IIIC':'Extensive nodal disease (N3).',
+  'IV':'Distant metastasis present (M1).'
+};
+
+function calcStage(t, n, m) {
+  if (!t || !n || !m) return '';
+  if (m === 'M1') return 'IV';
+  if (t === 'T4d') return 'IIIB';
+  var tN = t === 'Tis' ? 0 : (t === 'T1mi' || t === 'T1a' || t === 'T1b' || t === 'T1c') ? 1 : t === 'T2' ? 2 : t === 'T3' ? 3 : 4;
+  var nN = n === 'N0' ? 0 : n === 'N1mi' ? 0.5 : n === 'N1' ? 1 : (n === 'N2a' || n === 'N2b') ? 2 : 3;
+  if (t === 'Tis' && n === 'N0') return '0';
+  if (tN <= 1 && nN === 0) return 'IA';
+  if (tN <= 1 && nN === 0.5) return 'IB';
+  if ((tN <= 1 && nN === 1) || (tN === 2 && nN === 0)) return 'IIA';
+  if ((tN === 2 && nN === 1) || (tN === 3 && nN === 0)) return 'IIB';
+  if ((tN <= 2 && nN === 2) || (tN === 3 && (nN === 1 || nN === 2))) return 'IIIA';
+  if (t === 'T4a' || t === 'T4b' || t === 'T4c') return 'IIIB';
+  if (nN === 3) return 'IIIC';
+  return '';
+}
+
+function tMM(t) {
+  var map = {'Tis':0,'T1mi':1,'T1a':4,'T1b':8,'T1c':16,'T2':35,'T3':55,'T4a':60,'T4b':60,'T4c':60,'T4d':60};
+  return map[t] || 0;
+}
+
+function gv(id) { return document.getElementById(id).value; }
+
+function sv(id, val) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  for (var i = 0; i < el.options.length; i++) {
+    if (el.options[i].value === val || el.options[i].text === val) {
+      el.selectedIndex = i;
+      return true;
+    }
+  }
+  return false;
+}
+
+function drawSides(lat) {
+  if (lat === 'Right') return ['L'];
+  if (lat === 'Left') return ['R'];
+  if (lat === 'Bilateral') return ['L','R'];
+  return [];
+}
+
+function tumorPos(ds, quad, distCm) {
+  var cx = ds === 'L' ? 220 : 460;
+  var cy = 480;
+  var d = (distCm || 3) * 13.7;
+  var angles = {};
+  if (ds === 'L') {
+    // Patient RIGHT breast, diagram LEFT side
+    // Axilla is to the LEFT, sternum is to the RIGHT (midline)
+    // UO = up + left = 315deg, UI = up + right = 45deg
+    // LO = down + left = 225deg, LI = down + right = 135deg
+    angles = {UO:315, UI:45, LO:225, LI:135, C:0};
+  } else {
+    // Patient LEFT breast, diagram RIGHT side
+    // Axilla is to the RIGHT, sternum is to the LEFT (midline)
+    // UO = up + right = 45deg, UI = up + left = 315deg
+    // LO = down + right = 135deg, LI = down + left = 225deg
+    angles = {UO:45, UI:315, LO:135, LI:225, C:0};
+  }
+  var clk = window._parsedClockHour;
+  var deg;
+  if (clk != null) {
+    // Clock is anatomically fixed — 12=up, 3=diagram right (patient left),
+    // 6=down, 9=diagram left (patient right). Same for both breasts, no mirror.
+    // SVG: x increases rightward, y increases downward
+    // clock angle 0=12(up), 3=right, 6=down, 9=left
+    // In SVG: x = cx + r*sin(clockDeg), y = cy - r*cos(clockDeg)
+    // where clockDeg = hr * 30 degrees
+    var clockDeg = clk * 30;
+    deg = clockDeg * Math.PI / 180;
+  } else {
+    deg = (angles[quad] || 0) * Math.PI / 180;
+  }
+  return [cx + d * Math.sin(deg), cy - d * Math.cos(deg)];
+}
+
+function axPos(ds, count) {
+  var bx = ds === 'L' ? 115 : 565;
+  var by = 425;
+  var dir = ds === 'L' ? 1 : -1;
+  var result = [];
+  for (var i = 0; i < count; i++) {
+    result.push({x: bx + dir * (i % 2) * 16, y: by + Math.floor(i / 2) * 20});
+  }
+  return result;
+}
+
+function scPos(ds, count) {
+  var bx = ds === 'L' ? 286 : 394;
+  var by = 222;
+  var dir = ds === 'L' ? -1 : 1;
+  var result = [];
+  for (var i = 0; i < count; i++) {
+    result.push({x: bx + dir * (i % 2) * 14, y: by - Math.floor(i / 2) * 14});
+  }
+  return result;
+}
+
+function imPos(ds, count) {
+  var x = ds === 'L' ? 318 : 362;
+  var result = [];
+  for (var i = 0; i < count; i++) {
+    result.push({x: x, y: 282 + i * 38});
+  }
+  return result;
+}
+
+function go() {
+  var t = gv('T'), n = gv('N'), m = gv('M'), lat = gv('lat'), quad = gv('quad');
+  var grade = gv('grade'), recep = gv('recep');
+  var sizeCm = parseFloat(gv('size') || '0');
+  var distCm = parseFloat(gv('dist') || '0');
+  var scN = parseInt(gv('scn') || '0');
+  var imN = parseInt(gv('imn') || '0');
+  var stage = calcStage(t, n, m);
+  if (stage) {
+    document.getElementById('stageCard').style.display = 'block';
+    document.getElementById('diagCard').style.display = 'block';
+    var col = stage.indexOf('IV') === 0 ? '#791f1f' : stage.indexOf('III') === 0 ? '#712b13' : stage.indexOf('II') === 0 ? '#633806' : '#185fa5';
+    document.getElementById('stageBadge').innerHTML = '<span style="color:' + col + '">Stage ' + stage + '</span>';
+    document.getElementById('stageDesc').textContent = SD[stage] || '';
+    renderDiag(t, n, m, stage, grade, recep, lat, quad, sizeCm, distCm, scN, imN);
+  } else {
+    document.getElementById('stageCard').style.display = 'none';
+    document.getElementById('diagCard').style.display = 'none';
+  }
+}
+
+function renderDiag(t, n, m, stage, grade, recep, lat, quad, sizeCm, distCm, scN, imN) {
+  var now = new Date().toLocaleDateString('en-US', {year:'numeric', month:'long', day:'numeric'});
+  var tmm = tMM(t);
+  var tR = Math.max(7, Math.min(34, tmm * 0.46));
+  var nPos = n === 'N0' ? 0 : n === 'N1mi' ? 1 : n === 'N1' ? 1 : (n === 'N2a' || n === 'N2b') ? 4 : 6;
+  var nTotal = Math.max(3, nPos);
+  var rMap = {LumA:'ER+/PR+/HER2-', LumB:'ER+/PR+/HER2+', HER2e:'ER-/PR-/HER2+', TNBC:'Triple negative', ERp:'ER+/PR-/HER2-'};
+  var rText = rMap[recep] || '';
+  var sides = drawSides(lat);
+  var overlays = '';
+
+  for (var si = 0; si < sides.length; si++) {
+    var s = sides[si];
+    var bCX = s === 'L' ? 220 : 460;
+    var bCY = 480;
+
+    if (quad && tmm > 0) {
+      var tp = tumorPos(s, quad, distCm);
+      var tx = tp[0]; var ty = tp[1]; var r = tR;
+      if (distCm) overlays += '<line x1="' + bCX + '" y1="' + bCY + '" x2="' + tx.toFixed(1) + '" y2="' + ty.toFixed(1) + '" stroke="#111" stroke-width="0.6" stroke-dasharray="4 3" opacity="0.5"/>';
+      overlays += '<circle cx="' + tx.toFixed(1) + '" cy="' + ty.toFixed(1) + '" r="' + r + '" fill="none" stroke="#111" stroke-width="1.8"/>';
+      overlays += '<line x1="' + (tx - r*0.65).toFixed(1) + '" y1="' + (ty - r*0.65).toFixed(1) + '" x2="' + (tx + r*0.65).toFixed(1) + '" y2="' + (ty + r*0.65).toFixed(1) + '" stroke="#111" stroke-width="1.8"/>';
+      overlays += '<line x1="' + (tx + r*0.65).toFixed(1) + '" y1="' + (ty - r*0.65).toFixed(1) + '" x2="' + (tx - r*0.65).toFixed(1) + '" y2="' + (ty + r*0.65).toFixed(1) + '" stroke="#111" stroke-width="1.8"/>';
+      if (sizeCm) overlays += '<text x="' + (tx + r + 3).toFixed(0) + '" y="' + (ty + 4).toFixed(0) + '" font-size="9" fill="#111" font-family="Arial,sans-serif">' + sizeCm + ' cm</text>';
+      if (distCm) overlays += '<text x="' + (tx + r + 3).toFixed(0) + '" y="' + (ty + 15).toFixed(0) + '" font-size="9" fill="#111" font-family="Arial,sans-serif">' + distCm + ' cm nipple</text>';
+    }
+
+    if (t === 'T4b' || t === 'T4c') overlays += '<ellipse cx="' + bCX + '" cy="' + bCY + '" rx="100" ry="90" fill="none" stroke="#111" stroke-width="1.2" stroke-dasharray="5 3"/>';
+    if (t === 'T4d') overlays += '<ellipse cx="' + bCX + '" cy="' + bCY + '" rx="108" ry="98" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4 2"/>';
+
+    var axNodes = axPos(s, nTotal);
+    for (var ai = 0; ai < axNodes.length; ai++) {
+      var p = axNodes[ai];
+      var filled = ai < nPos;
+      overlays += '<circle cx="' + p.x + '" cy="' + p.y + '" r="7" fill="' + (filled ? '#111' : 'none') + '" stroke="#111" stroke-width="1.3"' + (!filled ? ' stroke-dasharray="3 2"' : '') + '/>';
+    }
+
+    var scCount = scN > 0 ? scN : ((n === 'N3b' || n === 'N3c') ? 1 : 0);
+    var scNodes = scPos(s, scCount);
+    for (var sci = 0; sci < scNodes.length; sci++) {
+      overlays += '<circle cx="' + scNodes[sci].x + '" cy="' + scNodes[sci].y + '" r="6" fill="#111" stroke="#111" stroke-width="1.3"/>';
+    }
+
+    var imCount = imN > 0 ? imN : ((n === 'N2b' || n === 'N3b') ? 1 : 0);
+    var imNodes = imPos(s, imCount);
+    for (var imi = 0; imi < imNodes.length; imi++) {
+      overlays += '<circle cx="' + imNodes[imi].x + '" cy="' + imNodes[imi].y + '" r="6" fill="#111" stroke="#111" stroke-width="1.3"/>';
+    }
+  }
+
+  if ((t === 'T4a' || t === 'T4c') && sides.length > 0) {
+    var x1 = sides.indexOf('L') >= 0 ? 100 : 350;
+    var x2 = sides.indexOf('R') >= 0 ? 580 : 330;
+    overlays += '<line x1="' + x1 + '" y1="530" x2="' + x2 + '" y2="530" stroke="#111" stroke-width="1.8" stroke-dasharray="6 3"/>';
+  }
+
+  var qLabel = {'UI':'upper inner','UO':'upper outer','LI':'lower inner','LO':'lower outer','C':'central'}[quad] || '';
+  var rLine = rText ? '<text x="20" y="746" font-size="9" fill="#555" font-family="Arial,sans-serif">Receptor: ' + rText + (grade ? ' - Grade ' + grade : '') + (sizeCm ? ' - ' + sizeCm + ' cm' : '') + '</text>' : '';
+  var mLine = m === 'M1' ? '<text x="340" y="560" font-size="10" fill="#111" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold">M1 - distant metastasis</text>' : '';
+  var hdr = 'AJCC 8th Ed - ' + (lat || '-') + (qLabel ? ' - ' + qLabel : '') + ' - Stage ' + stage + ' - ' + t + ' ' + n + ' ' + m + (rText ? ' - ' + rText : '');
+
+  var svg = '<svg viewBox="-30 0 740 800" xmlns="http://www.w3.org/2000/svg" style="width:100%;background:#fff" font-family="Arial,Helvetica,sans-serif">';
+  svg += '<rect x="-30" width="740" height="800" fill="#fff"/>';
+  svg += '<line x1="20" y1="16" x2="700" y2="16" stroke="#111" stroke-width="1.2"/>';
+  svg += '<text x="20" y="32" font-size="11" font-weight="bold" fill="#111">Breast cancer staging diagram</text>';
+  svg += '<text x="20" y="46" font-size="9" fill="#555">' + hdr + '</text>';
+  svg += '<text x="700" y="46" font-size="9" fill="#888" text-anchor="end">' + now + '</text>';
+  svg += '<line x1="20" y1="52" x2="700" y2="52" stroke="#111" stroke-width="0.5"/>';
+  svg += '<text x="110" y="66" font-size="9" fill="#bbb" text-anchor="middle">Patient\'s R</text>';
+  svg += '<text x="570" y="66" font-size="9" fill="#bbb" text-anchor="middle">Patient\'s L</text>';
+  svg += '<path d="M 282 80 Q 310 90 340 92 Q 370 90 398 80" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>';
+  svg += '<path d="M 282 80 Q 278 94 276 110 Q 274 128 276 146 Q 278 160 282 174" fill="none" stroke="#111" stroke-width="1.6" stroke-linecap="round"/>';
+  svg += '<path d="M 398 80 Q 402 94 404 110 Q 406 128 404 146 Q 402 160 398 174" fill="none" stroke="#111" stroke-width="1.6" stroke-linecap="round"/>';
+  svg += '<path d="M 282 174 Q 268 186 252 198 Q 236 208 218 214 Q 208 218 198 220" fill="none" stroke="#111" stroke-width="2.2" stroke-linecap="round"/>';
+  svg += '<path d="M 398 174 Q 412 186 428 198 Q 444 208 462 214 Q 472 218 482 220" fill="none" stroke="#111" stroke-width="2.2" stroke-linecap="round"/>';
+  svg += '<path d="M 282 174 Q 300 186 320 194 Q 340 200 360 194 Q 380 186 398 174" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>';
+  svg += '<path d="M 326 242 L 326 512 Q 326 532 340 532" fill="none" stroke="#111" stroke-width="0.9" stroke-linecap="round" opacity="0.55"/>';
+  svg += '<path d="M 354 242 L 354 512 Q 354 532 340 532" fill="none" stroke="#111" stroke-width="0.9" stroke-linecap="round" opacity="0.55"/>';
+  svg += '<path d="M 340 242 L 340 532" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.2"/>';
+  svg += '<path d="M 326 300 L 354 300" fill="none" stroke="#111" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>';
+  svg += '<path d="M 327 356 L 353 356" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.25"/>';
+  svg += '<path d="M 327 412 L 353 412" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.25"/>';
+  svg += '<path d="M 327 466 L 353 466" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.22"/>';
+  svg += '<path d="M 198 220 Q 220 220 244 222 Q 272 224 298 228 Q 320 232 332 238 Q 338 242 342 242" fill="none" stroke="#111" stroke-width="2.4" stroke-linecap="round"/>';
+  svg += '<path d="M 482 220 Q 460 220 436 222 Q 408 224 382 228 Q 360 232 348 238 Q 342 242 338 242" fill="none" stroke="#111" stroke-width="2.4" stroke-linecap="round"/>';
+  svg += '<path d="M 198 220 Q 176 230 158 248 Q 144 264 136 276 Q 118 276 90 276 Q 64 276 36 278" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round"/>';
+  svg += '<path d="M 36 414 Q 64 412 90 412 Q 112 412 122 412 Q 128 414 130 426 Q 134 452 132 480 Q 130 504 128 530" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>';
+  svg += '<path d="M 36 278 Q 26 344 36 414" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>';
+  svg += '<path d="M 482 220 Q 504 230 522 248 Q 536 264 544 276 Q 562 276 590 276 Q 616 276 644 278" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round"/>';
+  svg += '<path d="M 644 414 Q 616 412 590 412 Q 568 412 558 412 Q 552 414 550 426 Q 546 452 548 480 Q 550 504 552 530" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>';
+  svg += '<path d="M 644 278 Q 654 344 644 414" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>';
+  svg += '<path d="M 128 530 Q 124 558 122 588 Q 120 618 124 648 Q 128 674 134 698 Q 138 716 142 748" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>';
+  svg += '<path d="M 552 530 Q 556 558 558 588 Q 560 618 556 648 Q 552 674 546 698 Q 542 716 538 748" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>';
+  svg += '<path d="M 138 392 Q 178 380 218 376 Q 258 372 298 372" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.22"/>';
+  svg += '<path d="M 134 428 Q 176 414 220 410 Q 260 406 300 406" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.22"/>';
+  svg += '<path d="M 132 464 Q 174 448 218 444 Q 262 440 302 440" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.18"/>';
+  svg += '<path d="M 542 392 Q 502 380 462 376 Q 422 372 382 372" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.22"/>';
+  svg += '<path d="M 546 428 Q 504 414 460 410 Q 420 406 380 406" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.22"/>';
+  svg += '<path d="M 548 464 Q 506 448 462 444 Q 418 440 378 440" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.18"/>';
+  svg += '<path d="M 148 590 Q 180 562 210 550 Q 248 538 286 536 Q 310 534 340 532" fill="none" stroke="#111" stroke-width="1.2" stroke-linecap="round"/>';
+  svg += '<path d="M 532 590 Q 500 562 470 550 Q 432 538 394 536 Q 370 534 340 532" fill="none" stroke="#111" stroke-width="1.2" stroke-linecap="round"/>';
+  svg += '<path d="M 108 390 Q 118 396 128 410 C 128 462 140 490 156 512 C 172 534 194 548 218 554 C 242 560 266 556 286 544 C 306 532 320 510 324 486 C 328 460 322 434 314 416 C 312 410 312 414 312 414" fill="none" stroke="#111" stroke-width="1.6" stroke-linecap="round"/>';
+  svg += '<circle cx="220" cy="480" r="11" fill="none" stroke="#111" stroke-width="0.8"/>';
+  svg += '<circle cx="220" cy="480" r="4" fill="none" stroke="#111" stroke-width="1.2"/>';
+  svg += '<path d="M 572 390 Q 562 396 552 410 C 552 462 540 490 524 512 C 508 534 486 548 462 554 C 438 560 414 556 394 544 C 374 532 360 510 356 486 C 352 460 358 434 366 416 C 368 410 368 414 368 414" fill="none" stroke="#111" stroke-width="1.6" stroke-linecap="round"/>';
+  svg += '<circle cx="460" cy="480" r="11" fill="none" stroke="#111" stroke-width="0.8"/>';
+  svg += '<circle cx="460" cy="480" r="4" fill="none" stroke="#111" stroke-width="1.2"/>';
+  svg += '<path d="M 128 416 Q 144 404 162 394 Q 180 384 200 380" fill="none" stroke="#111" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>';
+  svg += '<path d="M 552 416 Q 536 404 518 394 Q 500 384 480 380" fill="none" stroke="#111" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>';
+  svg += '<path d="M 340 532 L 340 700" fill="none" stroke="#111" stroke-width="0.6" stroke-linecap="round" opacity="0.3"/>';
+  svg += '<path d="M 316 590 Q 340 588 364 590" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.2"/>';
+  svg += '<path d="M 312 636 Q 340 632 368 636" fill="none" stroke="#111" stroke-width="0.5" stroke-linecap="round" opacity="0.2"/>';
+  svg += '<path d="M 142 748 Q 154 768 170 784 Q 190 800 216 810 Q 250 820 286 824 Q 316 828 340 828" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>';
+  svg += '<path d="M 538 748 Q 526 768 510 784 Q 490 800 464 810 Q 430 820 394 824 Q 364 828 340 828" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>';
+  svg += '<ellipse cx="340" cy="738" rx="10" ry="13" fill="none" stroke="#111" stroke-width="1.4"/>';
+  svg += '<path d="M 334 734 Q 340 740 346 734" fill="none" stroke="#111" stroke-width="1" stroke-linecap="round"/>';
+  svg += '<path d="M 337 743 Q 340 748 343 743" fill="none" stroke="#111" stroke-width="0.8" stroke-linecap="round"/>';
+  svg += overlays + mLine;
+  svg += '<line x1="20" y1="720" x2="700" y2="720" stroke="#ddd" stroke-width="0.5"/>';
+  svg += '<circle cx="44" cy="726" r="7" fill="none" stroke="#111" stroke-width="1.5"/>';
+  svg += '<line x1="39" y1="721" x2="49" y2="731" stroke="#111" stroke-width="1.5"/>';
+  svg += '<line x1="49" y1="721" x2="39" y2="731" stroke="#111" stroke-width="1.5"/>';
+  svg += '<text x="56" y="730" font-size="9" fill="#555" font-family="Arial,sans-serif">Tumor</text>';
+  svg += '<circle cx="110" cy="726" r="7" fill="#111" stroke="#111" stroke-width="1"/>';
+  svg += '<text x="122" y="730" font-size="9" fill="#555" font-family="Arial,sans-serif">Node positive</text>';
+  svg += '<circle cx="210" cy="726" r="7" fill="none" stroke="#111" stroke-width="1.2" stroke-dasharray="3 2"/>';
+  svg += '<text x="222" y="730" font-size="9" fill="#555" font-family="Arial,sans-serif">Node negative</text>';
+  svg += rLine;
+  svg += '<line x1="20" y1="752" x2="700" y2="752" stroke="#111" stroke-width="0.5"/>';
+  svg += '<text x="20" y="764" font-size="9" fill="#aaa" font-family="Arial,sans-serif">Clinician: _________________________________   Date: _______________</text>';
+  svg += '</svg>';
+
+  document.getElementById('diagBox').innerHTML = svg;
+  window._svg = svg;
+}
+
+function printDiag() {
+  if (!window._svg) return;
+  var w = window.open('', '_blank');
+  w.document.write('<!DOCTYPE html><html><head><title>Breast Staging</title><style>body{margin:24px}@media print{body{margin:0}}</style></head><body>' + window._svg + '</body></html>');
+  w.document.close();
+  w.print();
+}
+
+function copySVG() {
+  if (!window._svg) return;
+  navigator.clipboard.writeText(window._svg).then(function() {
+    var btn = event.target.closest('button');
+    var o = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(function() { btn.textContent = o; }, 2000);
+  });
+}
+
+function parseText() {
+  window._parsedClockHour = null;
+  var raw = document.getElementById('ct').value;
+  var txt = raw.toLowerCase()
+    .replace(/,/g, ' ')
+    .replace(/her\s*2\s*neu|her\s*two\s*neu/g, 'her2')
+    .replace(/her\s*2/g, 'her2')
+    .replace(/\bnegative\b/g, '-').replace(/\bpositive\b/g, '+')
+    .replace(/\bone\b/g, '1').replace(/\btwo\b/g, '2').replace(/\bthree\b/g, '3')
+    .replace(/\bfour\b/g, '4').replace(/\bfive\b/g, '5').replace(/\bsix\b/g, '6')
+    .replace(/\bseven\b/g, '7').replace(/\beight\b/g, '8').replace(/\bnine\b/g, '9')
+    .replace(/\bzero\b/g, '0').replace(/\bpoint\b/g, '.').replace(/\boh\b/g, '0')
+    .replace(/centimeters?/g, 'cm');
+  var msgs = [];
+
+  if (/\bleft\b/.test(txt)) sv('lat', 'Left');
+  else if (/\bright\b/.test(txt)) sv('lat', 'Right');
+  else if (/bilateral/.test(txt)) sv('lat', 'Bilateral');
+
+  var sizeM = txt.match(/(\d+\.?\d*)\s*cm(?!\s*from)/);
+  if (sizeM) {
+    var cm = parseFloat(sizeM[1]);
+    var el = document.getElementById('size');
+    var bi = 1, bd = 99;
+    for (var i = 1; i < el.options.length; i++) {
+      var diff = Math.abs(parseFloat(el.options[i].value) - cm);
+      if (diff < bd) { bd = diff; bi = i; }
+    }
+    el.selectedIndex = bi;
+    var T = '';
+    if (/in\s*situ|tis/.test(txt)) T = 'Tis';
+    else if (cm <= 0.1) T = 'T1mi';
+    else if (cm <= 0.5) T = 'T1a';
+    else if (cm <= 1.0) T = 'T1b';
+    else if (cm <= 2.0) T = 'T1c';
+    else if (cm <= 5.0) T = 'T2';
+    else T = 'T3';
+    if (/t4[abcd]/.test(txt)) T = txt.match(/t4[abcd]/)[0].toUpperCase();
+    else if (/inflammatory/.test(txt)) T = 'T4d';
+    if (T) { sv('T', T); msgs.push(cm + ' cm - ' + T); }
+  }
+
+  var distM = txt.match(/(\d+\.?\d*)\s*cm\s*from\s*(the\s*)?nipple/);
+  if (distM) { sv('dist', String(Math.round(parseFloat(distM[1])))); }
+
+  var clockTxt = txt.replace(/\btwelve\b/g,'12').replace(/\beleven\b/g,'11').replace(/\bten\b/g,'10')
+    .replace(/\bnine\b/g,'9').replace(/\beight\b/g,'8').replace(/\bseven\b/g,'7')
+    .replace(/\bsix\b/g,'6').replace(/\bfive\b/g,'5').replace(/\bfour\b/g,'4')
+    .replace(/\bthree\b/g,'3').replace(/\btwo\b/g,'2').replace(/\bone\b/g,'1');
+  var clockM = clockTxt.match(/(\d{1,2})\s*(?:o['\s]?clock|oclock)/i);
+  if (clockM) {
+    var hr = parseInt(clockM[1]) % 12;
+    window._parsedClockHour = hr;
+    var isLeft = /\bleft\b/.test(txt);
+    var q = '';
+    // Clock is anatomically fixed — same orientation for both breasts:
+    // 12=up(clavicle), 3=patient left(diagram right), 6=down(navel), 9=patient right(diagram left)
+    // For RIGHT breast (diagram LEFT, drawSide L):
+    //   3 o'clock (patient left) = toward MIDLINE = INNER
+    //   9 o'clock (patient right) = toward AXILLA = OUTER
+    // For LEFT breast (diagram RIGHT, drawSide R):
+    //   3 o'clock (patient left) = toward AXILLA = OUTER
+    //   9 o'clock (patient right) = toward MIDLINE = INNER
+    if (!isLeft) {
+      // RIGHT breast: 9=outer(axilla), 3=inner(sternum)
+      if (hr === 0) q = 'UO';         // 12 = straight up, split — call upper outer
+      if (hr === 1 || hr === 2) q = 'UI';  // upper, toward sternum (3 side = inner)
+      if (hr === 3 || hr === 4) q = 'LI';  // toward sternum, going lower
+      if (hr === 5 || hr === 6) q = 'LI';  // 6 = down, inner side
+      if (hr === 7 || hr === 8) q = 'LO';  // lower, toward axilla (9 side = outer)
+      if (hr === 9 || hr === 10) q = 'UO'; // toward axilla = outer, going upper
+      if (hr === 11) q = 'UO';             // upper outer
+    } else {
+      // LEFT breast: 3=outer(axilla), 9=inner(sternum)
+      if (hr === 0) q = 'UO';         // 12 = straight up
+      if (hr === 1 || hr === 2) q = 'UO';  // upper, toward axilla (3 side = outer for left)
+      if (hr === 3 || hr === 4) q = 'LO';  // toward axilla, going lower
+      if (hr === 5 || hr === 6) q = 'LO';  // 6 = down, outer side
+      if (hr === 7 || hr === 8) q = 'LI';  // lower, toward sternum (9 side = inner)
+      if (hr === 9 || hr === 10) q = 'UI'; // toward sternum = inner, going upper
+      if (hr === 11) q = 'UO';             // upper outer
+    }
+    if (q) { sv('quad', q); msgs.push(clockM[1] + " o'clock - " + q); }
+  } else {
+    if (/upper\s*outer|upper\s*lateral/.test(txt)) sv('quad', 'UO');
+    else if (/upper\s*inner|upper\s*medial/.test(txt)) sv('quad', 'UI');
+    else if (/lower\s*outer|lower\s*lateral/.test(txt)) sv('quad', 'LO');
+    else if (/lower\s*inner|lower\s*medial/.test(txt)) sv('quad', 'LI');
+    else if (/central|retroareolar/.test(txt)) sv('quad', 'C');
+  }
+
+  var gM = txt.match(/grade\s*([1-3])/);
+  if (gM) sv('grade', 'G' + gM[1]);
+
+  var erP = /er\s*\+/.test(txt) || (/\ber\b/.test(txt) && !/er\s*-/.test(txt));
+  var prP = /pr\s*\+/.test(txt) || (/\bpr\b/.test(txt) && !/pr\s*-/.test(txt));
+  var h2P = /her2\s*\+/.test(txt) || /her2\s*pos/.test(txt);
+  var h2N = /her2\s*-/.test(txt) || /her2\s*neg/.test(txt);
+  var tnbc = /triple\s*neg/.test(txt) || (/er\s*-/.test(txt) && /pr\s*-/.test(txt) && h2N);
+  if (tnbc) sv('recep', 'TNBC');
+  else if (erP && prP && h2P) sv('recep', 'LumB');
+  else if (erP && prP && (h2N || !h2P)) sv('recep', 'LumA');
+  else if (!erP && !prP && h2P) sv('recep', 'HER2e');
+  else if (erP && !prP && (h2N || !h2P)) sv('recep', 'ERp');
+
+  var nNeg = /node\s*-|n0\b|no\s*(axillary\s*)?nodes?|node\s*neg/.test(txt);
+  var micro = /micromet|n1mi/.test(txt);
+  var nM = txt.match(/(\d+)\s*(?:\+\s*)?(?:positive\s*)?axillary\s*nodes?/);
+  var nCount = nM ? parseInt(nM[1]) : 0;
+  if (nNeg) sv('N', 'N0');
+  else if (micro) sv('N', 'N1mi');
+  else if (nCount >= 7) sv('N', 'N3a');
+  else if (nCount >= 4) sv('N', 'N2a');
+  else if (nCount >= 1) { sv('N', 'N1'); msgs.push(nCount + ' axillary node(s)'); }
+
+  var scM2 = txt.match(/(\d+)\s*(?:positive\s*)?supraclavicular/);
+  if (scM2) sv('scn', scM2[1]);
+  else if (/supraclavicular/.test(txt)) sv('scn', '1');
+
+  var imM = txt.match(/(\d+)\s*(?:positive\s*)?internal\s*mammar/);
+  if (imM) sv('imn', imM[1]);
+  else if (/internal\s*mammar/.test(txt)) sv('imn', '1');
+
+  if (/\bm1\b|metasta/.test(txt)) sv('M', 'M1');
+  else sv('M', 'M0');
+
+  var msgEl = document.getElementById('parseMsg');
+  msgEl.textContent = msgs.length ? 'Parsed: ' + msgs.join(' - ') : 'Fields updated - check dropdowns.';
+  go();
+}
+
+var recog = null, listening = false;
+function toggleMic() {
+  var btn = document.getElementById('micBtn');
+  var msg = document.getElementById('parseMsg');
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { msg.textContent = 'Speech recognition requires Chrome or Edge - please type your case.'; return; }
+  if (listening) { recog.stop(); return; }
+  recog = new SR();
+  recog.continuous = true; recog.interimResults = true; recog.lang = 'en-US';
+  recog.onstart = function() { listening = true; btn.textContent = 'Stop'; msg.textContent = 'Listening...'; document.getElementById('ct').value = ''; };
+  recog.onresult = function(e) { var f = '', im = ''; for (var i = 0; i < e.results.length; i++) { if (e.results[i].isFinal) f += e.results[i][0].transcript + ' '; else im += e.results[i][0].transcript; } document.getElementById('ct').value = (f + im).trim(); };
+  recog.onend = function() { listening = false; btn.textContent = 'Speak'; var t = document.getElementById('ct').value.trim(); if (t) { msg.textContent = 'Done - parsing...'; setTimeout(parseText, 80); } else { msg.textContent = 'No speech detected.'; } };
+  recog.onerror = function(e) { listening = false; btn.textContent = 'Speak'; msg.textContent = 'Mic error: ' + e.error; };
+  recog.start();
+}
+</script>
+</body>
+</html>
