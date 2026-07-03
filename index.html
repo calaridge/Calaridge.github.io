@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StageMap — Breast Cancer Staging v2.4</title>
+<title>StageMap — Breast Cancer Staging v2.5</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f0efec;color:#1a1a18;min-height:100vh;padding:1.5rem 1rem}
@@ -27,7 +26,7 @@ textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;back
 </head>
 <body>
 <div class="wrap">
-<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v2.4</p>
+<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v2.5</p>
 
 <div class="card">
   <div class="stitle">StageMap — Clinical Entry</div>
@@ -296,8 +295,9 @@ function renderDiag(t, n, m, stage, grade, recep, lat, quad, sizeCm, distCm, scN
   var now = new Date().toLocaleDateString('en-US', {year:'numeric', month:'long', day:'numeric'});
   var tmm = tMM(t);
   var tR = Math.max(7, Math.min(34, tmm * 0.46));
-  var nPos = n === 'N0' ? 0 : n === 'N1mi' ? 1 : n === 'N1' ? 1 : (n === 'N2a' || n === 'N2b') ? 4 : 6;
-  var nTotal = Math.max(3, nPos);
+  var nPos = window._parsedNodeCount != null ? window._parsedNodeCount :
+    (n === 'N0' ? 0 : n === 'N1mi' ? 1 : n === 'N1' ? 1 : (n === 'N2a' || n === 'N2b') ? 4 : 6);
+  var nTotal = Math.max(nPos + 1, 3);
   var rMap = {LumA:'ER+/PR+/HER2-', LumB:'ER+/PR+/HER2+', HER2e:'ER-/PR-/HER2+', TNBC:'Triple negative', ERp:'ER+/PR-/HER2-'};
   var rText = rMap[recep] || '';
   var sides = drawSides(lat);
@@ -444,6 +444,7 @@ function copySVG() {
 
 function parseText() {
   window._parsedClockHour = null;
+  window._parsedNodeCount = null;
   sv('M', 'M0'); // default to M0 unless mets explicitly mentioned
   var raw = document.getElementById('ct').value;
   var txt = raw.toLowerCase()
@@ -560,15 +561,18 @@ function parseText() {
 
   var nNeg = /node\s*-|n0\b|no\s*(axillary\s*)?nodes?|node\s*neg/.test(txt);
   var micro = /micromet|n1mi/.test(txt);
-  var nM = txt.match(/(\d+)\s*(?:\+\s*)?(?:positive\s*)?axillary\s*nodes?/) ||
+  // Match most specific patterns first — require axillary to avoid false matches
+  var nM = txt.match(/(\d+)\s*positive\s*axillary\s*nodes?/) ||
            txt.match(/(\d+)\s*axillary\s*nodes?/) ||
-           txt.match(/(\d+)\s*nodes?/);
+           txt.match(/axillary\s*nodes?\s*[:\-]?\s*(\d+)/) ||
+           txt.match(/(\d+)\s*positive\s*nodes?(?!\s*cm)/);
   var nCount = nM ? parseInt(nM[1]) : 0;
-  if (nNeg) sv('N', 'N0');
-  else if (micro) sv('N', 'N1mi');
-  else if (nCount >= 7) sv('N', 'N3a');
-  else if (nCount >= 4) sv('N', 'N2a');
-  else if (nCount >= 1) { sv('N', 'N1'); msgs.push(nCount + ' axillary node(s)'); }
+  if (nNeg) { sv('N', 'N0'); window._parsedNodeCount = 0; }
+  else if (micro) { sv('N', 'N1mi'); window._parsedNodeCount = 1; }
+  else if (nCount >= 7) { sv('N', 'N3a'); msgs.push(nCount + ' axillary nodes - N3a'); window._parsedNodeCount = nCount; }
+  else if (nCount >= 4) { sv('N', 'N2a'); msgs.push(nCount + ' axillary nodes - N2a'); window._parsedNodeCount = nCount; }
+  else if (nCount >= 1) { sv('N', 'N1'); msgs.push(nCount + ' axillary node(s) - N1'); window._parsedNodeCount = nCount; }
+  else { window._parsedNodeCount = 0; }
 
   var scM2 = txt.match(/(\d+)\s*(?:positive\s*)?supraclavicular/);
   if (scM2) sv('scn', scM2[1]);
