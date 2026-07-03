@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StageMap — Breast Cancer Staging v2.1</title>
+<title>StageMap — Breast Cancer Staging v2.2</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f0efec;color:#1a1a18;min-height:100vh;padding:1.5rem 1rem}
@@ -26,7 +26,7 @@ textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;back
 </head>
 <body>
 <div class="wrap">
-<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v2.1</p>
+<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v2.2</p>
 
 <div class="card">
   <div class="stitle">StageMap — Clinical Entry</div>
@@ -311,9 +311,7 @@ function renderDiag(t, n, m, stage, grade, recep, lat, quad, sizeCm, distCm, scN
       var tp = tumorPos(s, quad, distCm);
       var tx = tp[0]; var ty = tp[1]; var r = tR;
       if (distCm) overlays += '<line x1="' + bCX + '" y1="' + bCY + '" x2="' + tx.toFixed(1) + '" y2="' + ty.toFixed(1) + '" stroke="#111" stroke-width="0.6" stroke-dasharray="4 3" opacity="0.5"/>';
-      overlays += '<circle cx="' + tx.toFixed(1) + '" cy="' + ty.toFixed(1) + '" r="' + r + '" fill="none" stroke="#111" stroke-width="1.8"/>';
-      overlays += '<line x1="' + (tx - r*0.65).toFixed(1) + '" y1="' + (ty - r*0.65).toFixed(1) + '" x2="' + (tx + r*0.65).toFixed(1) + '" y2="' + (ty + r*0.65).toFixed(1) + '" stroke="#111" stroke-width="1.8"/>';
-      overlays += '<line x1="' + (tx + r*0.65).toFixed(1) + '" y1="' + (ty - r*0.65).toFixed(1) + '" x2="' + (tx - r*0.65).toFixed(1) + '" y2="' + (ty + r*0.65).toFixed(1) + '" stroke="#111" stroke-width="1.8"/>';
+      overlays += '<circle cx="' + tx.toFixed(1) + '" cy="' + ty.toFixed(1) + '" r="' + r + '" fill="red" stroke="red" stroke-width="1.8"/>';
       if (sizeCm) overlays += '<text x="' + (tx + r + 3).toFixed(0) + '" y="' + (ty + 4).toFixed(0) + '" font-size="9" fill="#111" font-family="Arial,sans-serif">' + sizeCm + ' cm</text>';
       if (distCm) overlays += '<text x="' + (tx + r + 3).toFixed(0) + '" y="' + (ty + 15).toFixed(0) + '" font-size="9" fill="#111" font-family="Arial,sans-serif">' + distCm + ' cm nipple</text>';
     }
@@ -410,9 +408,7 @@ function renderDiag(t, n, m, stage, grade, recep, lat, quad, sizeCm, distCm, scN
   svg += '<path d="M 337 743 Q 340 748 343 743" fill="none" stroke="#111" stroke-width="0.8" stroke-linecap="round"/>';
   svg += overlays + mLine;
   svg += '<line x1="20" y1="720" x2="700" y2="720" stroke="#ddd" stroke-width="0.5"/>';
-  svg += '<circle cx="44" cy="726" r="7" fill="none" stroke="#111" stroke-width="1.5"/>';
-  svg += '<line x1="39" y1="721" x2="49" y2="731" stroke="#111" stroke-width="1.5"/>';
-  svg += '<line x1="49" y1="721" x2="39" y2="731" stroke="#111" stroke-width="1.5"/>';
+  svg += '<circle cx="44" cy="726" r="7" fill="red" stroke="red" stroke-width="1.5"/>';
   svg += '<text x="56" y="730" font-size="9" fill="#555" font-family="Arial,sans-serif">Tumor</text>';
   svg += '<circle cx="110" cy="726" r="7" fill="#111" stroke="#111" stroke-width="1"/>';
   svg += '<text x="122" y="730" font-size="9" fill="#555" font-family="Arial,sans-serif">Node positive</text>';
