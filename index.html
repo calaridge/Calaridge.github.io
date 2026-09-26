@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StageMap — Breast Cancer Staging v2.9</title>
+<title>StageMap — Breast Cancer Staging v3.0</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f0efec;color:#1a1a18;min-height:100vh;padding:1.5rem 1rem}
@@ -26,7 +26,7 @@ textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;back
 </head>
 <body>
 <div class="wrap">
-<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v2.9</p>
+<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v3.0</p>
 
 <div class="card">
   <div class="stitle">StageMap — Clinical Entry</div>
@@ -330,7 +330,24 @@ function renderDiag(t, n, m, stage, grade, recep, lat, quad, sizeCm, distCm, scN
     }
 
     if (t === 'T4b' || t === 'T4c') overlays += '<ellipse cx="' + bCX + '" cy="' + bCY + '" rx="100" ry="90" fill="none" stroke="#111" stroke-width="1.2" stroke-dasharray="5 3"/>';
-    if (t === 'T4d') overlays += '<ellipse cx="' + bCX + '" cy="' + bCY + '" rx="108" ry="98" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4 2"/>';
+    if (t === 'T4d') {
+      // Stippled red dot pattern — inflammatory carcinoma
+      // Ellipse centred on breast, horizontal orientation
+      var eCX = bCX; var eCY = bCY - 10;
+      var eRX = 88; var eRY = 68;
+      // Draw outline ellipse
+      overlays += '<ellipse cx="' + eCX + '" cy="' + eCY + '" rx="' + eRX + '" ry="' + eRY + '" fill="none" stroke="#cc0000" stroke-width="1" stroke-dasharray="3 3" opacity="0.6"/>';
+      // Fill with stippled red dots in a grid clipped to ellipse
+      var dotSpacing = 18;
+      for (var dy = -eRY + 10; dy <= eRY - 10; dy += dotSpacing) {
+        // Calculate x extent at this y
+        var xExtent = eRX * Math.sqrt(1 - (dy * dy) / (eRY * eRY));
+        for (var dx = -xExtent + 8; dx <= xExtent - 8; dx += dotSpacing) {
+          overlays += '<circle cx="' + (eCX + dx).toFixed(1) + '" cy="' + (eCY + dy).toFixed(1) + '" r="3.5" fill="red" opacity="0.75"/>';
+        }
+      }
+      overlays += '<text x="' + eCX + '" y="' + (eCY + eRY + 14) + '" font-size="9" fill="#cc0000" font-family="Arial,sans-serif" text-anchor="middle">Inflammatory (T4d)</text>';
+    }
 
     var axNodes = axPos(s, nTotal);
     for (var ai = 0; ai < axNodes.length; ai++) {
