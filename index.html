@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StageMap — Breast Cancer Staging v2.8</title>
+<title>StageMap — Breast Cancer Staging v2.9</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f0efec;color:#1a1a18;min-height:100vh;padding:1.5rem 1rem}
@@ -26,7 +26,7 @@ textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;back
 </head>
 <body>
 <div class="wrap">
-<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v2.8</p>
+<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v2.9</p>
 
 <div class="card">
   <div class="stitle">StageMap — Clinical Entry</div>
@@ -310,13 +310,23 @@ function renderDiag(t, n, m, stage, grade, recep, lat, quad, sizeCm, distCm, scN
     var bCX = s === 'L' ? 220 : 460;
     var bCY = 480;
 
-    if (quad && tmm > 0) {
-      var tp = tumorPos(s, quad, distCm);
-      var tx = tp[0]; var ty = tp[1]; var r = tR;
-      if (distCm) overlays += '<line x1="' + bCX + '" y1="' + bCY + '" x2="' + tx.toFixed(1) + '" y2="' + ty.toFixed(1) + '" stroke="#cc0000" stroke-width="0.6" stroke-dasharray="4 3" opacity="0.6"/>';
+    // Draw tumors — multiple if _parsedTumors set, otherwise single
+    var tumorsToRraw = window._parsedTumors || (quad && tmm > 0 ? [{cm: sizeCm, T: t, quad: quad, clockHour: window._parsedClockHour, distCm: distCm}] : []);
+    for (var tumi = 0; tumi < tumorsToRraw.length; tumi++) {
+      var tum = tumorsToRraw[tumi];
+      if (!tum.quad && tum.clockHour == null) continue;
+      var tumMM = tMM(tum.T || t);
+      var r = Math.max(7, Math.min(34, tumMM * 0.46));
+      var savedClk = window._parsedClockHour;
+      window._parsedClockHour = tum.clockHour;
+      var tp = tumorPos(s, tum.quad, tum.distCm || distCm);
+      window._parsedClockHour = savedClk;
+      var tx = tp[0]; var ty = tp[1];
+      if (tum.distCm || distCm) overlays += '<line x1="' + bCX + '" y1="' + bCY + '" x2="' + tx.toFixed(1) + '" y2="' + ty.toFixed(1) + '" stroke="#cc0000" stroke-width="0.6" stroke-dasharray="4 3" opacity="0.6"/>';
       overlays += '<circle cx="' + tx.toFixed(1) + '" cy="' + ty.toFixed(1) + '" r="' + r + '" fill="red" stroke="#cc0000" stroke-width="1.5"/>';
-      if (sizeCm) overlays += '<text x="' + (tx + r + 3).toFixed(0) + '" y="' + (ty + 4).toFixed(0) + '" font-size="9" fill="#cc0000" font-family="Arial,sans-serif">' + sizeCm + ' cm</text>';
-      if (distCm) overlays += '<text x="' + (tx + r + 3).toFixed(0) + '" y="' + (ty + 15).toFixed(0) + '" font-size="9" fill="#cc0000" font-family="Arial,sans-serif">' + distCm + ' cm nipple</text>';
+      var labelY = ty + 4;
+      if (tum.cm) { overlays += '<text x="' + (tx + r + 3).toFixed(0) + '" y="' + labelY.toFixed(0) + '" font-size="9" fill="#cc0000" font-family="Arial,sans-serif">' + tum.cm + ' cm</text>'; labelY += 11; }
+      if (tum.distCm) overlays += '<text x="' + (tx + r + 3).toFixed(0) + '" y="' + labelY.toFixed(0) + '" font-size="9" fill="#cc0000" font-family="Arial,sans-serif">' + tum.distCm + ' cm nipple</text>';
     }
 
     if (t === 'T4b' || t === 'T4c') overlays += '<ellipse cx="' + bCX + '" cy="' + bCY + '" rx="100" ry="90" fill="none" stroke="#111" stroke-width="1.2" stroke-dasharray="5 3"/>';
@@ -446,6 +456,7 @@ function copySVG() {
 
 function parseText() {
   window._parsedClockHour = null;
+  window._parsedTumors = null;
   var raw = document.getElementById('ct').value;
   var txt = raw.toLowerCase()
     .replace(/,/g, ' ')
@@ -460,74 +471,131 @@ function parseText() {
     .replace(/(\d)cm/g, '$1 cm');
   var msgs = [];
 
-  // Always default M to M0
+  // Default M to M0
   sv('M', 'M0');
 
+  // Laterality
   if (/\bleft\b/.test(txt)) sv('lat', 'Left');
   else if (/\bright\b/.test(txt)) sv('lat', 'Right');
   else if (/bilateral/.test(txt)) sv('lat', 'Bilateral');
 
-  // Tumor size — exclude "from nipple" matches
-  var sizeM = txt.match(/(\d+\.?\d*)\s*cm(?!\s*from)/);
-  if (sizeM) {
-    var cm = parseFloat(sizeM[1]);
+  var isLeft = /\bleft\b/.test(txt);
+
+  // MULTI-TUMOR DETECTION
+  // Split on natural tumor separators: "first/second/third tumor/lesion/mass", "lesion 1/2", "tumor 1/2"
+  var tumorSegments = [];
+  var splitPat = /(?:^|\s)(?:first\s+(?:lesion|tumor|mass|focus)|second\s+(?:lesion|tumor|mass|focus)|third\s+(?:lesion|tumor|mass|focus)|fourth\s+(?:lesion|tumor|mass|focus)|(?:lesion|tumor|mass|focus)\s+1\b|(?:lesion|tumor|mass|focus)\s+2\b|(?:lesion|tumor|mass|focus)\s+3\b)/g;
+  var splitMatches = [];
+  var m2;
+  while ((m2 = splitPat.exec(txt)) !== null) {
+    splitMatches.push(m2.index);
+  }
+
+  if (splitMatches.length >= 2) {
+    // Multiple tumors found — split text into segments
+    for (var si2 = 0; si2 < splitMatches.length; si2++) {
+      var segStart = splitMatches[si2];
+      var segEnd = si2 + 1 < splitMatches.length ? splitMatches[si2 + 1] : txt.length;
+      tumorSegments.push(txt.substring(segStart, segEnd));
+    }
+  } else {
+    // Single tumor — whole text is one segment
+    tumorSegments.push(txt);
+  }
+
+  // Parse each tumor segment
+  var tumors = [];
+  var largestCm = 0;
+  var largestT = '';
+
+  for (var ti = 0; ti < tumorSegments.length; ti++) {
+    var seg = tumorSegments[ti];
+    var tumor = {cm: 0, T: '', quad: '', clockHour: null, distCm: 0};
+
+    // Size
+    var sizeM = seg.match(/(\d+\.?\d*)\s*cm(?!\s*from)/);
+    if (sizeM) {
+      tumor.cm = parseFloat(sizeM[1]);
+      var cm = tumor.cm;
+      if (/in\s*situ|tis/.test(seg)) tumor.T = 'Tis';
+      else if (cm <= 0.1) tumor.T = 'T1mi';
+      else if (cm <= 0.5) tumor.T = 'T1a';
+      else if (cm <= 1.0) tumor.T = 'T1b';
+      else if (cm <= 2.0) tumor.T = 'T1c';
+      else if (cm <= 5.0) tumor.T = 'T2';
+      else tumor.T = 'T3';
+      if (/t4[abcd]/.test(seg)) tumor.T = seg.match(/t4[abcd]/)[0].toUpperCase();
+      else if (/inflammatory/.test(seg)) tumor.T = 'T4d';
+    }
+
+    // Distance from nipple
+    var distM2 = seg.match(/(\d+\.?\d*)\s*cm\s*from\s*(the\s*)?nipple/);
+    if (distM2) tumor.distCm = parseFloat(distM2[1]);
+
+    // Clock or quadrant
+    var clockTxt2 = seg.replace(/\btwelve\b/g,'12').replace(/\beleven\b/g,'11').replace(/\bten\b/g,'10');
+    var clockM2 = clockTxt2.match(/(\d{1,2})\s*(?:o['\s]?clock|oclock)/i);
+    if (clockM2) {
+      var hr = parseInt(clockM2[1]) % 12;
+      tumor.clockHour = hr;
+      var q = '';
+      if (!isLeft) {
+        if (hr === 0 || hr === 11 || hr === 1) q = 'UO';
+        else if (hr === 2 || hr === 3) q = 'UI';
+        else if (hr === 4 || hr === 5) q = 'LI';
+        else if (hr === 6 || hr === 7) q = 'LO';
+        else if (hr === 8 || hr === 9) q = 'LO';
+        else if (hr === 10) q = 'UO';
+      } else {
+        if (hr === 0 || hr === 11 || hr === 1) q = 'UO';
+        else if (hr === 2 || hr === 3) q = 'UO';
+        else if (hr === 4 || hr === 5) q = 'LO';
+        else if (hr === 6 || hr === 7) q = 'LO';
+        else if (hr === 8 || hr === 9) q = 'LI';
+        else if (hr === 10) q = 'UI';
+      }
+      tumor.quad = q;
+    } else {
+      if (/upper\s*outer|upper\s*lateral/.test(seg)) tumor.quad = 'UO';
+      else if (/upper\s*inner|upper\s*medial/.test(seg)) tumor.quad = 'UI';
+      else if (/lower\s*outer|lower\s*lateral/.test(seg)) tumor.quad = 'LO';
+      else if (/lower\s*inner|lower\s*medial/.test(seg)) tumor.quad = 'LI';
+      else if (/central|retroareolar/.test(seg)) tumor.quad = 'C';
+    }
+
+    if (tumor.cm > 0 || tumor.quad) {
+      tumors.push(tumor);
+      if (tumor.cm > largestCm) {
+        largestCm = tumor.cm;
+        largestT = tumor.T;
+      }
+    }
+  }
+
+  // Set T from largest tumor
+  if (largestT) {
+    sv('T', largestT);
+    var tLabel = tumors.length > 1 ? largestCm + ' cm (largest) - ' + largestT + '(m)' : largestCm + ' cm - ' + largestT;
+    msgs.push(tLabel);
+    // Update size dropdown to largest
     var el = document.getElementById('size');
     var bi = 1, bd = 99;
     for (var i = 1; i < el.options.length; i++) {
-      var diff = Math.abs(parseFloat(el.options[i].value) - cm);
+      var diff = Math.abs(parseFloat(el.options[i].value) - largestCm);
       if (diff < bd) { bd = diff; bi = i; }
     }
     el.selectedIndex = bi;
-    var T = '';
-    if (/in\s*situ|tis/.test(txt)) T = 'Tis';
-    else if (cm <= 0.1) T = 'T1mi';
-    else if (cm <= 0.5) T = 'T1a';
-    else if (cm <= 1.0) T = 'T1b';
-    else if (cm <= 2.0) T = 'T1c';
-    else if (cm <= 5.0) T = 'T2';
-    else T = 'T3';
-    if (/t4[abcd]/.test(txt)) T = txt.match(/t4[abcd]/)[0].toUpperCase();
-    else if (/inflammatory/.test(txt)) T = 'T4d';
-    if (T) { sv('T', T); msgs.push(cm + ' cm - ' + T); }
   }
 
-  // Distance from nipple
-  var distM = txt.match(/(\d+\.?\d*)\s*cm\s*from\s*(the\s*)?nipple/);
-  if (distM) { sv('dist', String(Math.round(parseFloat(distM[1])))); }
-
-  // Clock face or quadrant
-  var clockTxt = txt.replace(/\btwelve\b/g,'12').replace(/\beleven\b/g,'11').replace(/\bten\b/g,'10');
-  var clockM = clockTxt.match(/(\d{1,2})\s*(?:o['\s]?clock|oclock)/i);
-  if (clockM) {
-    var hr = parseInt(clockM[1]) % 12;
-    window._parsedClockHour = hr;
-    var isLeft = /\bleft\b/.test(txt);
-    var q = '';
-    if (!isLeft) {
-      // Right breast: 3=inner(sternum), 9=outer(axilla)
-      if (hr === 0 || hr === 11 || hr === 1) q = 'UO';
-      else if (hr === 2 || hr === 3) q = 'UI';
-      else if (hr === 4 || hr === 5) q = 'LI';
-      else if (hr === 6 || hr === 7) q = 'LO';
-      else if (hr === 8 || hr === 9) q = 'LO';
-      else if (hr === 10) q = 'UO';
-    } else {
-      // Left breast: 3=outer(axilla), 9=inner(sternum)
-      if (hr === 0 || hr === 11 || hr === 1) q = 'UO';
-      else if (hr === 2 || hr === 3) q = 'UO';
-      else if (hr === 4 || hr === 5) q = 'LO';
-      else if (hr === 6 || hr === 7) q = 'LO';
-      else if (hr === 8 || hr === 9) q = 'LI';
-      else if (hr === 10) q = 'UI';
-    }
-    if (q) { sv('quad', q); msgs.push(clockM[1] + " o'clock - " + q); }
-  } else {
-    if (/upper\s*outer|upper\s*lateral/.test(txt)) sv('quad', 'UO');
-    else if (/upper\s*inner|upper\s*medial/.test(txt)) sv('quad', 'UI');
-    else if (/lower\s*outer|lower\s*lateral/.test(txt)) sv('quad', 'LO');
-    else if (/lower\s*inner|lower\s*medial/.test(txt)) sv('quad', 'LI');
-    else if (/central|retroareolar/.test(txt)) sv('quad', 'C');
+  // Set quad and dist from first tumor for dropdowns
+  if (tumors.length > 0) {
+    if (tumors[0].quad) sv('quad', tumors[0].quad);
+    if (tumors[0].distCm) sv('dist', String(Math.round(tumors[0].distCm)));
+    if (tumors[0].clockHour != null) window._parsedClockHour = tumors[0].clockHour;
   }
+
+  // Store all tumors for diagram
+  window._parsedTumors = tumors.length > 1 ? tumors : null;
 
   // Grade
   var gM = txt.match(/grade\s*([1-3])/);
@@ -545,14 +613,13 @@ function parseText() {
   else if (!erP && !prP && h2P) sv('recep', 'HER2e');
   else if (erP && !prP && (h2N || !h2P)) sv('recep', 'ERp');
 
-  // Axillary nodes — match specific patterns only
+  // Nodes
   var nNeg = /node\s*-|n0\b|no\s*(axillary\s*)?nodes?|node\s*neg/.test(txt);
   var micro = /micromet|n1mi/.test(txt);
   var nM = txt.match(/(\d+)\s*\+\s*axillary\s*nodes?/) ||
             txt.match(/(\d+)\s*axillary\s*nodes?/) ||
             txt.match(/(\d+)\s*\+\s*nodes?(?!\s*cm)/);
   var nCount = nM ? parseInt(nM[1]) : 0;
-
   if (nNeg) { sv('N', 'N0'); sv('nodecount', '0'); }
   else if (micro) { sv('N', 'N1mi'); sv('nodecount', '1'); }
   else if (nCount >= 7) { sv('N', 'N3a'); sv('nodecount', String(nCount)); msgs.push(nCount + ' nodes - N3a'); }
