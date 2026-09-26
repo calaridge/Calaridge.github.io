@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StageMap — Breast Cancer Staging v3.0</title>
+<title>StageMap — Breast Cancer Staging v3.1</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f0efec;color:#1a1a18;min-height:100vh;padding:1.5rem 1rem}
@@ -26,7 +26,7 @@ textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;back
 </head>
 <body>
 <div class="wrap">
-<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v3.0</p>
+<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v3.1</p>
 
 <div class="card">
   <div class="stitle">StageMap — Clinical Entry</div>
@@ -332,15 +332,11 @@ function renderDiag(t, n, m, stage, grade, recep, lat, quad, sizeCm, distCm, scN
     if (t === 'T4b' || t === 'T4c') overlays += '<ellipse cx="' + bCX + '" cy="' + bCY + '" rx="100" ry="90" fill="none" stroke="#111" stroke-width="1.2" stroke-dasharray="5 3"/>';
     if (t === 'T4d') {
       // Stippled red dot pattern — inflammatory carcinoma
-      // Ellipse centred on breast, horizontal orientation
       var eCX = bCX; var eCY = bCY - 10;
       var eRX = 88; var eRY = 68;
-      // Draw outline ellipse
       overlays += '<ellipse cx="' + eCX + '" cy="' + eCY + '" rx="' + eRX + '" ry="' + eRY + '" fill="none" stroke="#cc0000" stroke-width="1" stroke-dasharray="3 3" opacity="0.6"/>';
-      // Fill with stippled red dots in a grid clipped to ellipse
       var dotSpacing = 18;
       for (var dy = -eRY + 10; dy <= eRY - 10; dy += dotSpacing) {
-        // Calculate x extent at this y
         var xExtent = eRX * Math.sqrt(1 - (dy * dy) / (eRY * eRY));
         for (var dx = -xExtent + 8; dx <= xExtent - 8; dx += dotSpacing) {
           overlays += '<circle cx="' + (eCX + dx).toFixed(1) + '" cy="' + (eCY + dy).toFixed(1) + '" r="3.5" fill="red" opacity="0.75"/>';
@@ -602,6 +598,13 @@ function parseText() {
       if (diff < bd) { bd = diff; bi = i; }
     }
     el.selectedIndex = bi;
+  } else if (/inflamm/.test(txt)) {
+    // Inflammatory carcinoma — T4d even without stated size
+    sv('T', 'T4d');
+    sv('size', '5.0');
+    msgs.push('Inflammatory carcinoma - T4d');
+    // Set quad to central so diagram draws the stippled pattern
+    sv('quad', 'C');
   }
 
   // Set quad and dist from first tumor for dropdowns
