@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StageMap — Breast Cancer Staging v3.1</title>
+<title>StageMap — Breast Cancer Staging v3.6</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f0efec;color:#1a1a18;min-height:100vh;padding:1.5rem 1rem}
@@ -26,7 +26,7 @@ textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;back
 </head>
 <body>
 <div class="wrap">
-<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v3.1</p>
+<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v3.6</p>
 
 <div class="card">
   <div class="stitle">StageMap — Clinical Entry</div>
@@ -134,7 +134,13 @@ textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;back
         <option value="6">6</option><option value="7">7</option><option value="8">8</option>
         <option value="9">9</option><option value="10">10</option>
       </select></div>
-    <div></div>
+    <div><label class="lbl">Oncotype DX Recurrence Score</label>
+      <select id="oncotype" onchange="go()">
+        <option value="">&#8212; not provided &#8212;</option>
+        <option value="low">Low (&lt;18)</option>
+        <option value="int">Intermediate (18-30)</option>
+        <option value="high">High (&ge;31)</option>
+      </select></div>
   </div>
 </div>
 
@@ -171,6 +177,145 @@ var SD = {
   'IIIC':'Extensive nodal disease (N3).',
   'IV':'Distant metastasis present (M1).'
 };
+
+function calcPrognosticStage(anatomic, t, n, m, recep, grade, oncotype) {
+  // AJCC 8th Edition Prognostic Stage Table
+  // Not applicable for M1 (always Stage IV), T4d inflammatory (always IIIB)
+  if (m === 'M1') return 'IV';
+  if (t === 'T4d') return 'IIIB';
+  if (!anatomic || !recep || !grade) return '';
+
+  var er = (recep === 'LumA' || recep === 'LumB' || recep === 'ERp');
+  var pr = (recep === 'LumA' || recep === 'LumB');
+  var her2 = (recep === 'LumB' || recep === 'HER2e');
+  var tnbc = (recep === 'TNBC');
+  var g = parseInt(grade.replace('G',''));
+
+  // Oncotype only applies to ER+ HER2- N0 tumors
+  var useOncotype = (er && !her2 && n === 'N0' && oncotype);
+
+  // Oncotype DX rules for N0 ER+ HER2- (overrides grade-based prognostic)
+  if (useOncotype) {
+    if (oncotype === 'low') {
+      // Low RS (<18): T1-T2 N0 → IA regardless of grade
+      if (t === 'T1mi' || t === 'T1a' || t === 'T1b' || t === 'T1c' || t === 'T2') return 'IA';
+    }
+    if (oncotype === 'int') {
+      // Intermediate RS (18-30): T1 → IA, T2 → IIA
+      if (t === 'T1mi' || t === 'T1a' || t === 'T1b' || t === 'T1c') return 'IA';
+      if (t === 'T2') return 'IIA';
+    }
+    // High RS (≥31): fall through to standard table
+  }
+
+  // Full AJCC 8th edition prognostic stage lookup
+  // Key: anatomic stage + ER + PR + HER2 + Grade → prognostic stage
+  // Source: AJCC 8th Ed Table 2 (pp 603-606)
+
+  var a = anatomic;
+
+  // Stage 0
+  if (a === '0') return '0';
+
+  // Stage IA (T1 N0 M0)
+  if (a === 'IA') {
+    if (her2) return 'IA'; // HER2+ always stays IA at T1N0
+    if (tnbc) return g <= 2 ? 'IA' : 'IA'; // TNBC T1N0 always IA
+    // ER+/HER2-
+    if (er && !her2) return 'IA'; // ER+ T1N0 always IA prognostically
+  }
+
+  // Stage IB (T1 N1mi or T0/T1 N1mi)
+  if (a === 'IB') {
+    if (her2) return 'IA';
+    if (tnbc) return 'IIA';
+    if (er && !her2 && g <= 2) return 'IA';
+    if (er && !her2 && g === 3) return 'IIA';
+  }
+
+  // Stage IIA
+  if (a === 'IIA') {
+    // T1 N1
+    var isT1 = (t === 'T1mi' || t === 'T1a' || t === 'T1b' || t === 'T1c');
+    var isT2N0 = (t === 'T2' && n === 'N0');
+    if (her2) {
+      if (isT1) return 'IA';
+      if (isT2N0) return 'IB';
+      return 'IIA';
+    }
+    if (tnbc) {
+      if (isT1) return 'IIA';
+      if (isT2N0) return 'IIA';
+      return 'IIA';
+    }
+    // ER+/HER2-
+    if (er && !her2) {
+      if (isT1 && g <= 2) return 'IA';
+      if (isT1 && g === 3) return 'IIA';
+      if (isT2N0 && g === 1) return 'IA';
+      if (isT2N0 && g === 2) return 'IB';
+      if (isT2N0 && g === 3) return 'IIA';
+      // T2 N1mi
+      if (g <= 2) return 'IB';
+      return 'IIA';
+    }
+  }
+
+  // Stage IIB
+  if (a === 'IIB') {
+    var isT2N1 = (t === 'T2' && n === 'N1');
+    var isT3N0 = (t === 'T3' && n === 'N0');
+    if (her2) {
+      if (isT2N1) return 'IIA';
+      if (isT3N0) return 'IIB';
+      return 'IIB';
+    }
+    if (tnbc) {
+      if (isT2N1) return 'IIB';
+      if (isT3N0) return 'IIIA';
+      return 'IIB';
+    }
+    // ER+/HER2-
+    if (er && !her2) {
+      if (isT2N1 && g === 1) return 'IA';
+      if (isT2N1 && g === 2) return 'IIA';
+      if (isT2N1 && g === 3) return 'IIB';
+      if (isT3N0 && g === 1) return 'IIA';
+      if (isT3N0 && g === 2) return 'IIB';
+      if (isT3N0 && g === 3) return 'IIIA';
+      return 'IIB';
+    }
+  }
+
+  // Stage IIIA
+  if (a === 'IIIA') {
+    if (her2) return 'IIIA';
+    if (tnbc) return 'IIIA';
+    if (er && !her2) {
+      if (g === 1) return 'IIB';
+      if (g === 2) return 'IIIA';
+      return 'IIIA';
+    }
+  }
+
+  // Stage IIIB
+  if (a === 'IIIB') {
+    if (her2) return 'IIIB';
+    if (tnbc) return 'IIIB';
+    if (er && !her2) return g <= 2 ? 'IIIB' : 'IIIB';
+    return 'IIIB';
+  }
+
+  // Stage IIIC
+  if (a === 'IIIC') {
+    if (her2) return 'IIIC';
+    if (tnbc) return 'IIIC';
+    if (er && !her2) return g <= 2 ? 'IIIB' : 'IIIC';
+    return 'IIIC';
+  }
+
+  return '';
+}
 
 function calcStage(t, n, m) {
   if (!t || !n || !m) return '';
@@ -269,23 +414,58 @@ function imPos(ds, count) {
 
 function go() {
   var t = gv('T'), n = gv('N'), m = gv('M'), lat = gv('lat'), quad = gv('quad');
+  if (lat !== 'Bilateral') window._bilateralTumors = null;
   var grade = gv('grade'), recep = gv('recep');
   var sizeCm = parseFloat(gv('size') || '0');
   var distCm = parseFloat(gv('dist') || '0');
   var scN = parseInt(gv('scn') || '0');
   var imN = parseInt(gv('imn') || '0');
   var nodeCount = gv('nodecount') !== '' ? parseInt(gv('nodecount')) : null;
+  var oncotype = gv('oncotype');
   var stage = calcStage(t, n, m);
+  var progStage = stage ? calcPrognosticStage(stage, t, n, m, recep, grade, oncotype) : '';
+
+  function stageColor(s) {
+    if (!s) return '#888';
+    return s.indexOf('IV') === 0 ? '#791f1f' : s.indexOf('III') === 0 ? '#712b13' : s.indexOf('II') === 0 ? '#633806' : '#185fa5';
+  }
+
   if (stage) {
     document.getElementById('stageCard').style.display = 'block';
     document.getElementById('diagCard').style.display = 'block';
-    var col = stage.indexOf('IV') === 0 ? '#791f1f' : stage.indexOf('III') === 0 ? '#712b13' : stage.indexOf('II') === 0 ? '#633806' : '#185fa5';
-    document.getElementById('stageBadge').innerHTML = '<span style="color:' + col + '">Stage ' + stage + '</span>';
-    document.getElementById('stageDesc').textContent = SD[stage] || '';
+
+    // Build side-by-side badge
+    var progLabel = progStage ? '<span style="color:' + stageColor(progStage) + '">' + progStage + '</span>' : '<span style="color:#aaa">&#8212;</span>';
+    var oncLabel = oncotype && progStage ? ' <span style="font-size:10px;color:#888">(Oncotype ' + oncotype + ')</span>' : '';
+    document.getElementById('stageBadge').innerHTML =
+      '<div style="display:flex;gap:20px;align-items:flex-end">' +
+        '<div><div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Anatomic</div>' +
+        '<span style="font-size:22px;color:' + stageColor(stage) + '">' + stage + '</span></div>' +
+        '<div><div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Prognostic' + oncLabel + '</div>' +
+        '<span style="font-size:22px">' + progLabel + '</span></div>' +
+      '</div>';
+
+    document.getElementById('stageDesc').innerHTML =
+      '<div style="font-size:11px;color:#555;line-height:1.7">' +
+      '<b>Anatomic ' + stage + ':</b> ' + (SD[stage] || '') + '<br>' +
+      (progStage ? '<b>Prognostic ' + progStage + ':</b> ' + (SD[progStage] || '') : '<span style="color:#aaa">Prognostic stage requires grade and receptor status.</span>') +
+      '</div>';
+
     renderDiag(t, n, m, stage, grade, recep, lat, quad, sizeCm, distCm, scN, imN, nodeCount);
   } else {
     document.getElementById('stageCard').style.display = 'none';
     document.getElementById('diagCard').style.display = 'none';
+    // Tell user what is missing
+    var missing = [];
+    if (!t) missing.push('T stage (tumor size)');
+    if (!n) missing.push('N stage (nodal status)');
+    if (!m) missing.push('M stage (metastasis)');
+    if (!lat) missing.push('laterality (left/right)');
+    if (missing.length) {
+      var msgEl = document.getElementById('parseMsg');
+      msgEl.textContent = 'Missing: ' + missing.join(', ') + ' — please add or select these fields.';
+      msgEl.style.color = '#cc0000';
+    }
   }
 }
 
@@ -310,8 +490,14 @@ function renderDiag(t, n, m, stage, grade, recep, lat, quad, sizeCm, distCm, scN
     var bCX = s === 'L' ? 220 : 460;
     var bCY = 480;
 
-    // Draw tumors — multiple if _parsedTumors set, otherwise single
-    var tumorsToRraw = window._parsedTumors || (quad && tmm > 0 ? [{cm: sizeCm, T: t, quad: quad, clockHour: window._parsedClockHour, distCm: distCm}] : []);
+    // Draw tumors — bilateral, multiple, or single
+    var tumorsToRraw;
+    if (window._bilateralTumors) {
+      var biSideTum = s === 'L' ? window._bilateralTumors.L : window._bilateralTumors.R;
+      tumorsToRraw = biSideTum ? [biSideTum] : [];
+    } else {
+      tumorsToRraw = window._parsedTumors || (quad && tmm > 0 ? [{cm: sizeCm, T: t, quad: quad, clockHour: window._parsedClockHour, distCm: distCm}] : []);
+    }
     for (var tumi = 0; tumi < tumorsToRraw.length; tumi++) {
       var tum = tumorsToRraw[tumi];
       if (!tum.quad && tum.clockHour == null) continue;
@@ -329,6 +515,11 @@ function renderDiag(t, n, m, stage, grade, recep, lat, quad, sizeCm, distCm, scN
       if (tum.distCm) overlays += '<text x="' + (tx + r + 3).toFixed(0) + '" y="' + labelY.toFixed(0) + '" font-size="9" fill="#cc0000" font-family="Arial,sans-serif">' + tum.distCm + ' cm nipple</text>';
     }
 
+    if (window._pagets) {
+      // Red dot on nipple + label
+      overlays += '<circle cx="' + bCX + '" cy="' + bCY + '" r="9" fill="red" stroke="#cc0000" stroke-width="1.5"/>';
+      overlays += '<text x="' + (bCX + 14) + '" y="' + (bCY + 4) + '" font-size="9" fill="#cc0000" font-family="Arial,sans-serif">Paget\'s</text>';
+    }
     if (t === 'T4b' || t === 'T4c') overlays += '<ellipse cx="' + bCX + '" cy="' + bCY + '" rx="100" ry="90" fill="none" stroke="#111" stroke-width="1.2" stroke-dasharray="5 3"/>';
     if (t === 'T4d') {
       // Stippled red dot pattern — inflammatory carcinoma
@@ -470,6 +661,9 @@ function copySVG() {
 function parseText() {
   window._parsedClockHour = null;
   window._parsedTumors = null;
+  window._pagets = false;
+  window._bilateralTumors = null;
+  sv('oncotype', '');
   var raw = document.getElementById('ct').value;
   var txt = raw.toLowerCase()
     .replace(/,/g, ' ')
@@ -488,11 +682,81 @@ function parseText() {
   sv('M', 'M0');
 
   // Laterality
-  if (/\bleft\b/.test(txt)) sv('lat', 'Left');
+  var isBilateral = /bilateral/.test(txt);
+  if (isBilateral) sv('lat', 'Bilateral');
+  else if (/\bleft\b/.test(txt)) sv('lat', 'Left');
   else if (/\bright\b/.test(txt)) sv('lat', 'Right');
-  else if (/bilateral/.test(txt)) sv('lat', 'Bilateral');
 
-  var isLeft = /\bleft\b/.test(txt);
+  var isLeft = /\bleft\b/.test(txt) && !isBilateral;
+
+  // For bilateral cases, extract per-breast segments
+  // e.g. "right breast 2 cm upper outer ... left breast 1.5 cm upper inner"
+  if (isBilateral) {
+    var bilat = {L: null, R: null}; // L=diagram left=patient right, R=diagram right=patient left
+    var rightMatch = txt.match(/right\s+breast\s+([\s\S]*?)(?=left\s+breast|$)/);
+    var leftMatch  = txt.match(/left\s+breast\s+([\s\S]*?)(?=right\s+breast|$)/);
+
+    function parseTumorSeg(seg, sideIsLeft) {
+      var tum = {cm:0, T:'', quad:'', clockHour:null, distCm:0};
+      var sm = seg.match(/(\d+\.?\d*)\s*cm(?!\s*from)/);
+      if (sm) {
+        tum.cm = parseFloat(sm[1]);
+        var c = tum.cm;
+        if (c <= 0.1) tum.T = 'T1mi';
+        else if (c <= 0.5) tum.T = 'T1a';
+        else if (c <= 1.0) tum.T = 'T1b';
+        else if (c <= 2.0) tum.T = 'T1c';
+        else if (c <= 5.0) tum.T = 'T2';
+        else tum.T = 'T3';
+      }
+      var dm = seg.match(/(\d+\.?\d*)\s*cm\s*from\s*(the\s*)?nipple/);
+      if (dm) tum.distCm = parseFloat(dm[1]);
+      var ck = seg.match(/(\d{1,2})\s*(?:o['\s]?clock|oclock)/i);
+      if (ck) {
+        var hr = parseInt(ck[1]) % 12;
+        tum.clockHour = hr;
+        var q = '';
+        if (!sideIsLeft) {
+          if (hr===0||hr===11||hr===1) q='UO'; else if (hr===2||hr===3) q='UI';
+          else if (hr===4||hr===5) q='LI'; else if (hr>=6&&hr<=9) q='LO'; else q='UO';
+        } else {
+          if (hr===0||hr===11||hr===1) q='UO'; else if (hr===2||hr===3) q='UO';
+          else if (hr===4||hr===5) q='LO'; else if (hr>=6&&hr<=8) q='LO';
+          else if (hr===9||hr===10) q='LI'; else q='UO';
+        }
+        tum.quad = q;
+      } else {
+        if (/upper\s*outer/.test(seg)) tum.quad='UO';
+        else if (/upper\s*inner/.test(seg)) tum.quad='UI';
+        else if (/lower\s*outer/.test(seg)) tum.quad='LO';
+        else if (/lower\s*inner/.test(seg)) tum.quad='LI';
+        else if (/central/.test(seg)) tum.quad='C';
+      }
+      return tum;
+    }
+
+    if (rightMatch) bilat.L = parseTumorSeg(rightMatch[1], false); // right breast = diagram L
+    if (leftMatch)  bilat.R = parseTumorSeg(leftMatch[1],  true);  // left breast  = diagram R
+    window._bilateralTumors = bilat;
+
+    // T stage from largest
+    var bCms = [];
+    if (bilat.L && bilat.L.cm) bCms.push(bilat.L.cm);
+    if (bilat.R && bilat.R.cm) bCms.push(bilat.R.cm);
+    if (bCms.length) {
+      var maxCm = Math.max.apply(null, bCms);
+      var bT = maxCm <= 0.1 ? 'T1mi' : maxCm <= 0.5 ? 'T1a' : maxCm <= 1.0 ? 'T1b' : maxCm <= 2.0 ? 'T1c' : maxCm <= 5.0 ? 'T2' : 'T3';
+      sv('T', bT);
+      msgs.push('Bilateral - largest ' + maxCm + ' cm - ' + bT);
+      var el2 = document.getElementById('size');
+      var bi2 = 1, bd2 = 99;
+      for (var i2 = 1; i2 < el2.options.length; i2++) {
+        var diff2 = Math.abs(parseFloat(el2.options[i2].value) - maxCm);
+        if (diff2 < bd2) { bd2 = diff2; bi2 = i2; }
+      }
+      el2.selectedIndex = bi2;
+    }
+  }
 
   // MULTI-TUMOR DETECTION
   // Split on natural tumor separators: "first/second/third tumor/lesion/mass", "lesion 1/2", "tumor 1/2"
@@ -603,8 +867,23 @@ function parseText() {
     sv('T', 'T4d');
     sv('size', '5.0');
     msgs.push('Inflammatory carcinoma - T4d');
-    // Set quad to central so diagram draws the stippled pattern
     sv('quad', 'C');
+  }
+
+  // Paget's disease — nipple involvement, Tis unless associated invasive tumor present
+  if (/paget/.test(txt)) {
+    window._pagets = true;
+    if (!gv('T')) {
+      // No invasive tumor stated — Tis
+      sv('T', 'Tis');
+      sv('N', 'N0');
+      msgs.push("Paget's disease - Tis (no invasive tumor)");
+    } else {
+      // Associated invasive tumor — T stage stays from tumor, Paget's is noted
+      msgs.push("Paget's disease with invasive tumor - " + gv('T'));
+    }
+  } else {
+    window._pagets = false;
   }
 
   // Set quad and dist from first tumor for dropdowns
@@ -616,6 +895,20 @@ function parseText() {
 
   // Store all tumors for diagram
   window._parsedTumors = tumors.length > 1 ? tumors : null;
+
+  // Oncotype DX recurrence score
+  var oncoM = txt.match(/oncotype\s*(?:dx\s*)?(?:score\s*)?(?:of\s*)?(\d+)/);
+  if (oncoM) {
+    var rs = parseInt(oncoM[1]);
+    sv('oncotype', rs < 18 ? 'low' : rs <= 30 ? 'int' : 'high');
+    msgs.push('Oncotype RS ' + rs + ' - ' + (rs < 18 ? 'low' : rs <= 30 ? 'intermediate' : 'high'));
+  } else if (/oncotype.*low|low.*oncotype/.test(txt)) {
+    sv('oncotype', 'low');
+  } else if (/oncotype.*high|high.*oncotype/.test(txt)) {
+    sv('oncotype', 'high');
+  } else if (/oncotype.*int|intermediate.*oncotype/.test(txt)) {
+    sv('oncotype', 'int');
+  }
 
   // Grade
   var gM = txt.match(/grade\s*([1-3])/);
@@ -647,7 +940,8 @@ function parseText() {
   else if (nCount >= 1) { sv('N', 'N1'); sv('nodecount', String(nCount)); msgs.push(nCount + ' node(s) - N1'); }
 
   // Mets
-  if (/\bm1\b|metasta/.test(txt)) sv('M', 'M1');
+  // Only set M1 for distant metastasis — exclude nodal micrometastasis
+  if (/\bm1\b/.test(txt) || (/metasta/.test(txt) && !/micro\s*metasta/.test(txt))) sv('M', 'M1');
   else sv('M', 'M0');
 
   // Supraclavicular
@@ -661,6 +955,7 @@ function parseText() {
   else if (/internal\s*mammar/.test(txt)) sv('imn', '1');
 
   var msgEl = document.getElementById('parseMsg');
+  msgEl.style.color = '#555';
   msgEl.textContent = msgs.length ? 'Parsed: ' + msgs.join(' - ') : 'Fields updated - check dropdowns.';
   go();
 }
