@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StageMap — Breast Cancer Staging v3.6</title>
+<title>StageMap — Breast Cancer Staging v3.8</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f0efec;color:#1a1a18;min-height:100vh;padding:1.5rem 1rem}
@@ -26,7 +26,7 @@ textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;back
 </head>
 <body>
 <div class="wrap">
-<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v3.6</p>
+<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v3.8</p>
 
 <div class="card">
   <div class="stitle">StageMap — Clinical Entry</div>
@@ -209,70 +209,79 @@ function calcPrognosticStage(anatomic, t, n, m, recep, grade, oncotype) {
   }
 
   // Full AJCC 8th edition prognostic stage lookup
-  // Key: anatomic stage + ER + PR + HER2 + Grade → prognostic stage
-  // Source: AJCC 8th Ed Table 2 (pp 603-606)
+  // Source: AJCC Cancer Staging Manual 8th Ed, Table 2 (pp 603-606)
+  // Columns: ER+ PR+ HER2- | ER+ PR+ HER2+ | ER- PR- HER2+ | ER- PR- HER2- (TNBC)
+  // Rows: Anatomic stage × Grade
 
   var a = anatomic;
+  var isT1 = (t === 'T1mi' || t === 'T1a' || t === 'T1b' || t === 'T1c');
+  var isT2N0 = (t === 'T2' && n === 'N0');
+  var isT2N1 = (t === 'T2' && (n === 'N1' || n === 'N1mi'));
+  var isT3N0 = (t === 'T3' && n === 'N0');
 
-  // Stage 0
   if (a === '0') return '0';
 
-  // Stage IA (T1 N0 M0)
+  // ---- Stage IA (T1 N0) ----
   if (a === 'IA') {
-    if (her2) return 'IA'; // HER2+ always stays IA at T1N0
-    if (tnbc) return g <= 2 ? 'IA' : 'IA'; // TNBC T1N0 always IA
-    // ER+/HER2-
-    if (er && !her2) return 'IA'; // ER+ T1N0 always IA prognostically
+    if (tnbc) { return g <= 2 ? 'IA' : 'IIA'; }
+    if (her2 && !er) return 'IA';   // ER-/PR-/HER2+
+    if (her2 && er) return 'IA';    // ER+/PR+/HER2+
+    if (er) return 'IA';            // ER+/HER2- all grades
   }
 
-  // Stage IB (T1 N1mi or T0/T1 N1mi)
+  // ---- Stage IB (T1 N1mi) ----
   if (a === 'IB') {
-    if (her2) return 'IA';
     if (tnbc) return 'IIA';
+    if (her2 && !er) return 'IA';
+    if (her2 && er) return 'IA';
     if (er && !her2 && g <= 2) return 'IA';
     if (er && !her2 && g === 3) return 'IIA';
   }
 
-  // Stage IIA
+  // ---- Stage IIA (T1N1 or T2N0) ----
   if (a === 'IIA') {
-    // T1 N1
-    var isT1 = (t === 'T1mi' || t === 'T1a' || t === 'T1b' || t === 'T1c');
-    var isT2N0 = (t === 'T2' && n === 'N0');
-    if (her2) {
+    if (tnbc) {
+      if (isT1) return g <= 2 ? 'IIA' : 'IIA';
+      if (isT2N0) return g <= 2 ? 'IIA' : 'IIIA';
+      return 'IIA';
+    }
+    if (her2 && !er) {
       if (isT1) return 'IA';
       if (isT2N0) return 'IB';
       return 'IIA';
     }
-    if (tnbc) {
-      if (isT1) return 'IIA';
-      if (isT2N0) return 'IIA';
+    if (her2 && er) {
+      if (isT1) return 'IA';
+      if (isT2N0) return 'IA';
       return 'IIA';
     }
     // ER+/HER2-
     if (er && !her2) {
-      if (isT1 && g <= 2) return 'IA';
+      if (isT1 && g === 1) return 'IA';
+      if (isT1 && g === 2) return 'IA';
       if (isT1 && g === 3) return 'IIA';
       if (isT2N0 && g === 1) return 'IA';
       if (isT2N0 && g === 2) return 'IB';
       if (isT2N0 && g === 3) return 'IIA';
-      // T2 N1mi
-      if (g <= 2) return 'IB';
       return 'IIA';
     }
   }
 
-  // Stage IIB
+  // ---- Stage IIB (T2N1 or T3N0) ----
   if (a === 'IIB') {
-    var isT2N1 = (t === 'T2' && n === 'N1');
-    var isT3N0 = (t === 'T3' && n === 'N0');
-    if (her2) {
+    if (tnbc) {
+      if (isT2N1) return g <= 2 ? 'IIB' : 'IIIB';
+      if (isT3N0) return g <= 2 ? 'IIIA' : 'IIIB';
+      return 'IIB';
+    }
+    if (her2 && !er) {
       if (isT2N1) return 'IIA';
       if (isT3N0) return 'IIB';
       return 'IIB';
     }
-    if (tnbc) {
-      if (isT2N1) return 'IIB';
-      if (isT3N0) return 'IIIA';
+    if (her2 && er) {
+      if (isT2N1) return 'IIA';
+      if (isT3N0) return 'IIA';
       return 'IIB';
     }
     // ER+/HER2-
@@ -287,10 +296,11 @@ function calcPrognosticStage(anatomic, t, n, m, recep, grade, oncotype) {
     }
   }
 
-  // Stage IIIA
+  // ---- Stage IIIA ----
   if (a === 'IIIA') {
-    if (her2) return 'IIIA';
-    if (tnbc) return 'IIIA';
+    if (tnbc) return g <= 2 ? 'IIIA' : 'IIIC';
+    if (her2 && !er) return 'IIIA';
+    if (her2 && er) return 'IIIA';
     if (er && !her2) {
       if (g === 1) return 'IIB';
       if (g === 2) return 'IIIA';
@@ -298,18 +308,20 @@ function calcPrognosticStage(anatomic, t, n, m, recep, grade, oncotype) {
     }
   }
 
-  // Stage IIIB
+  // ---- Stage IIIB ----
   if (a === 'IIIB') {
-    if (her2) return 'IIIB';
-    if (tnbc) return 'IIIB';
-    if (er && !her2) return g <= 2 ? 'IIIB' : 'IIIB';
+    if (tnbc) return 'IIIC';
+    if (her2 && !er) return 'IIIB';
+    if (her2 && er) return 'IIIB';
+    if (er && !her2) return g <= 2 ? 'IIIB' : 'IIIC';
     return 'IIIB';
   }
 
-  // Stage IIIC
+  // ---- Stage IIIC ----
   if (a === 'IIIC') {
-    if (her2) return 'IIIC';
     if (tnbc) return 'IIIC';
+    if (her2 && !er) return 'IIIC';
+    if (her2 && er) return 'IIIC';
     if (er && !her2) return g <= 2 ? 'IIIB' : 'IIIC';
     return 'IIIC';
   }
@@ -915,12 +927,20 @@ function parseText() {
   if (gM) sv('grade', 'G' + gM[1]);
 
   // Receptors
-  var erP = /er\s*\+/.test(txt) || (/\ber\b/.test(txt) && !/er\s*-/.test(txt));
-  var prP = /pr\s*\+/.test(txt) || (/\bpr\b/.test(txt) && !/pr\s*-/.test(txt));
-  var h2P = /her2\s*\+/.test(txt);
-  var h2N = /her2\s*-/.test(txt);
-  var tnbc = /triple\s*neg/.test(txt) || (/er\s*-/.test(txt) && /pr\s*-/.test(txt) && h2N);
-  if (tnbc) sv('recep', 'TNBC');
+  // After text normalisation: positive→+, negative→-
+  // Also handle "neg" abbreviation
+  var ntxt = txt.replace(/\bneg\b/g, '-').replace(/\bpos\b/g, '+');
+
+  // Triple negative — explicit phrase or all three markers negative
+  var tripleNeg = /triple\s*(-|neg|negative)/.test(ntxt) ||
+                  (/er\s*-/.test(ntxt) && /pr\s*-/.test(ntxt) && /her2\s*-/.test(ntxt));
+
+  var erP = !tripleNeg && (/er\s*\+/.test(ntxt) || (/\ber\b/.test(ntxt) && !/er\s*-/.test(ntxt)));
+  var prP = !tripleNeg && (/pr\s*\+/.test(ntxt) || (/\bpr\b/.test(ntxt) && !/pr\s*-/.test(ntxt)));
+  var h2P = !tripleNeg && /her2\s*\+/.test(ntxt);
+  var h2N = tripleNeg || /her2\s*-/.test(ntxt);
+
+  if (tripleNeg) sv('recep', 'TNBC');
   else if (erP && prP && h2P) sv('recep', 'LumB');
   else if (erP && prP && (h2N || !h2P)) sv('recep', 'LumA');
   else if (!erP && !prP && h2P) sv('recep', 'HER2e');
