@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StageMap — Breast Cancer Staging v3.8</title>
+<title>StageMap — Breast Cancer Staging v4.0</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f0efec;color:#1a1a18;min-height:100vh;padding:1.5rem 1rem}
@@ -26,7 +26,7 @@ textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;back
 </head>
 <body>
 <div class="wrap">
-<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v3.8</p>
+<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v4.0</p>
 
 <div class="card">
   <div class="stitle">StageMap — Clinical Entry</div>
@@ -241,8 +241,8 @@ function calcPrognosticStage(anatomic, t, n, m, recep, grade, oncotype) {
   // ---- Stage IIA (T1N1 or T2N0) ----
   if (a === 'IIA') {
     if (tnbc) {
-      if (isT1) return g <= 2 ? 'IIA' : 'IIA';
-      if (isT2N0) return g <= 2 ? 'IIA' : 'IIIA';
+      if (isT1) return g <= 2 ? 'IIA' : 'IIB';    // T1 N1 TNBC: G1/2→IIA, G3→IIB
+      if (isT2N0) return g <= 2 ? 'IIA' : 'IIIA'; // T2 N0 TNBC: G1/2→IIA, G3→IIIA
       return 'IIA';
     }
     if (her2 && !er) {
