@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StageMap — Breast Cancer Staging v4.1</title>
+<title>StageMap — Breast Cancer Staging v4.2</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f0efec;color:#1a1a18;min-height:100vh;padding:1.5rem 1rem}
@@ -26,7 +26,7 @@ textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;back
 </head>
 <body>
 <div class="wrap">
-<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v4.1</p>
+<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v4.2</p>
 
 <div class="card">
   <div class="stitle">StageMap — Clinical Entry</div>
@@ -275,7 +275,7 @@ function calcPrognosticStage(anatomic, t, n, m, recep, grade, oncotype) {
       return 'IIB';
     }
     if (her2 && !er) {
-      if (isT2N1) return 'IIA';
+      if (isT2N1) return 'IIIA';
       if (isT3N0) return 'IIB';
       return 'IIB';
     }
@@ -286,7 +286,7 @@ function calcPrognosticStage(anatomic, t, n, m, recep, grade, oncotype) {
     }
     // ER+/HER2-
     if (er && !her2) {
-      if (isT2N1 && g === 1) return 'IA';
+      if (isT2N1 && g === 1) return 'IB';
       if (isT2N1 && g === 2) return 'IIA';
       if (isT2N1 && g === 3) return 'IIB';
       if (isT3N0 && g === 1) return 'IIA';
@@ -302,7 +302,7 @@ function calcPrognosticStage(anatomic, t, n, m, recep, grade, oncotype) {
     if (her2 && !er) return 'IIIA';
     if (her2 && er) return 'IIIA';
     if (er && !her2) {
-      if (g === 1) return 'IIB';
+      if (g === 1) return 'IIIA';
       if (g === 2) return 'IIIA';
       return 'IIIA';
     }
@@ -952,6 +952,7 @@ function parseText() {
   var nM = txt.match(/(\d+)\s*\+\s*axillary\s*nodes?/) ||
             txt.match(/(\d+)\s*axillary\s*nodes?/) ||
             txt.match(/(\d+)\s*\+\s*nodes?(?!\s*cm)/);
+  if (!nM && /\+\s*axillary\s*nodes?/.test(txt)) nM = ['_','1'];
   var nCount = nM ? parseInt(nM[1]) : 0;
   if (nNeg) { sv('N', 'N0'); sv('nodecount', '0'); }
   else if (micro) { sv('N', 'N1mi'); sv('nodecount', '1'); }
