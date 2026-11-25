@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StageMap — Breast Cancer Staging v4.3</title>
+<title>StageMap — Breast Cancer Staging v4.2</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f0efec;color:#1a1a18;min-height:100vh;padding:1.5rem 1rem}
@@ -26,7 +26,7 @@ textarea{width:100%;padding:8px;font-size:13px;font-family:Arial,sans-serif;back
 </head>
 <body>
 <div class="wrap">
-<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v4.3</p>
+<p style="font-size:10px;color:#aaa;text-align:right;margin-bottom:4px">StageMap v4.2</p>
 
 <div class="card">
   <div class="stitle">StageMap — Clinical Entry</div>
@@ -298,17 +298,12 @@ function calcPrognosticStage(anatomic, t, n, m, recep, grade, oncotype) {
 
   // ---- Stage IIIA ----
   if (a === 'IIIA') {
-    var isT2N2 = (t === 'T2' && n === 'N2a');
     if (tnbc) return g <= 2 ? 'IIIA' : 'IIIC';
     if (her2 && !er) return 'IIIA';
-    if (her2 && er) {
-      if (isT2N2) return g <= 2 ? 'IIA' : 'IIIA';
-      return 'IIIA';
-    }
+    if (her2 && er) return 'IIIA';
     if (er && !her2) {
-      if (isT2N2 && g === 1) return 'IIA';
-      if (isT2N2 && g === 2) return 'IIB';
-      if (isT2N2 && g === 3) return 'IIIA';
+      if (g === 1) return 'IIIA';
+      if (g === 2) return 'IIIA';
       return 'IIIA';
     }
   }
@@ -706,73 +701,139 @@ function parseText() {
 
   var isLeft = /\bleft\b/.test(txt) && !isBilateral;
 
-  // For bilateral cases, extract per-breast segments
-  // e.g. "right breast 2 cm upper outer ... left breast 1.5 cm upper inner"
+  // For bilateral cases, fully parse each breast segment independently
   if (isBilateral) {
-    var bilat = {L: null, R: null}; // L=diagram left=patient right, R=diagram right=patient left
-    var rightMatch = txt.match(/right\s+breast\s+([\s\S]*?)(?=left\s+breast|$)/);
-    var leftMatch  = txt.match(/left\s+breast\s+([\s\S]*?)(?=right\s+breast|$)/);
+    // Split on "right breast" / "left breast" markers — order-independent
+    var rightSeg = '', leftSeg = '';
+    var rIdx = txt.indexOf('right breast');
+    var lIdx = txt.indexOf('left breast');
+    if (rIdx !== -1 && lIdx !== -1) {
+      if (rIdx < lIdx) {
+        rightSeg = txt.substring(rIdx + 12, lIdx);
+        leftSeg  = txt.substring(lIdx + 11);
+      } else {
+        leftSeg  = txt.substring(lIdx + 11, rIdx);
+        rightSeg = txt.substring(rIdx + 12);
+      }
+    } else if (rIdx !== -1) { rightSeg = txt.substring(rIdx + 12); }
+    else if (lIdx !== -1)   { leftSeg  = txt.substring(lIdx + 11); }
 
-    function parseTumorSeg(seg, sideIsLeft) {
-      var tum = {cm:0, T:'', quad:'', clockHour:null, distCm:0};
+    function parseBilSeg(seg, sideIsLeft) {
+      var s = {cm:0, T:'', quad:'C', clockHour:null, distCm:0,
+               nodes:0, nStage:'N0', recep:'', grade:0,
+               inflammatory:false, pagets:false, dcis:false};
+      // Size
       var sm = seg.match(/(\d+\.?\d*)\s*cm(?!\s*from)/);
       if (sm) {
-        tum.cm = parseFloat(sm[1]);
-        var c = tum.cm;
-        if (c <= 0.1) tum.T = 'T1mi';
-        else if (c <= 0.5) tum.T = 'T1a';
-        else if (c <= 1.0) tum.T = 'T1b';
-        else if (c <= 2.0) tum.T = 'T1c';
-        else if (c <= 5.0) tum.T = 'T2';
-        else tum.T = 'T3';
+        s.cm = parseFloat(sm[1]);
+        var c = s.cm;
+        if (/in\s*situ|dcis|tis/.test(seg)) { s.T='Tis'; s.dcis=true; }
+        else if (c<=0.1) s.T='T1mi'; else if (c<=0.5) s.T='T1a';
+        else if (c<=1.0) s.T='T1b'; else if (c<=2.0) s.T='T1c';
+        else if (c<=5.0) s.T='T2';  else s.T='T3';
       }
+      if (/inflamm/.test(seg)) { s.T='T4d'; s.inflammatory=true; if (!s.cm) s.cm=5; }
+      if (/paget/.test(seg))   { s.pagets=true; if (!s.T) { s.T='Tis'; s.dcis=true; } }
+      if ((/in\s*situ|dcis/.test(seg)) && !s.T) { s.T='Tis'; s.dcis=true; }
+      // Distance from nipple
       var dm = seg.match(/(\d+\.?\d*)\s*cm\s*from\s*(the\s*)?nipple/);
-      if (dm) tum.distCm = parseFloat(dm[1]);
+      if (dm) s.distCm = parseFloat(dm[1]);
+      // Clock
       var ck = seg.match(/(\d{1,2})\s*(?:o['\s]?clock|oclock)/i);
       if (ck) {
         var hr = parseInt(ck[1]) % 12;
-        tum.clockHour = hr;
-        var q = '';
+        s.clockHour = hr;
         if (!sideIsLeft) {
-          if (hr===0||hr===11||hr===1) q='UO'; else if (hr===2||hr===3) q='UI';
-          else if (hr===4||hr===5) q='LI'; else if (hr>=6&&hr<=9) q='LO'; else q='UO';
+          if (hr===0||hr===11||hr===1) s.quad='UO'; else if (hr===2||hr===3) s.quad='UI';
+          else if (hr===4||hr===5) s.quad='LI'; else if (hr>=6&&hr<=9) s.quad='LO'; else s.quad='UO';
         } else {
-          if (hr===0||hr===11||hr===1) q='UO'; else if (hr===2||hr===3) q='UO';
-          else if (hr===4||hr===5) q='LO'; else if (hr>=6&&hr<=8) q='LO';
-          else if (hr===9||hr===10) q='LI'; else q='UO';
+          if (hr===0||hr===11||hr===1) s.quad='UO'; else if (hr===2||hr===3) s.quad='UO';
+          else if (hr===4||hr===5) s.quad='LO'; else if (hr>=6&&hr<=8) s.quad='LO';
+          else if (hr===9||hr===10) s.quad='UI'; else s.quad='UO';
         }
-        tum.quad = q;
       } else {
-        if (/upper\s*outer/.test(seg)) tum.quad='UO';
-        else if (/upper\s*inner/.test(seg)) tum.quad='UI';
-        else if (/lower\s*outer/.test(seg)) tum.quad='LO';
-        else if (/lower\s*inner/.test(seg)) tum.quad='LI';
-        else if (/central/.test(seg)) tum.quad='C';
+        if (/upper\s*outer/.test(seg)) s.quad='UO';
+        else if (/upper\s*inner/.test(seg)) s.quad='UI';
+        else if (/lower\s*outer/.test(seg)) s.quad='LO';
+        else if (/lower\s*inner/.test(seg)) s.quad='LI';
+        else if (/central/.test(seg)) s.quad='C';
       }
-      return tum;
+      // Nodes — parsed only from this segment
+      var nNegS = /no\s*(axillary\s*)?nodes?|node\s*-|n0\b|node\s*neg/.test(seg);
+      var microS = /micromet|n1mi/.test(seg);
+      var nMS = seg.match(/(\d+)\s*\+\s*axillary\s*nodes?/) ||
+                seg.match(/(\d+)\s*axillary\s*nodes?/) ||
+                seg.match(/(\d+)\s*\+\s*nodes?(?!\s*cm)/);
+      if (!nMS && /\+\s*axillary\s*nodes?/.test(seg)) nMS=['_','1'];
+      var nc = nMS ? parseInt(nMS[1]) : 0;
+      if (nNegS)      { s.nStage='N0';   s.nodes=0; }
+      else if (microS){ s.nStage='N1mi'; s.nodes=1; }
+      else if (nc>=7) { s.nStage='N3a';  s.nodes=nc; }
+      else if (nc>=4) { s.nStage='N2a';  s.nodes=nc; }
+      else if (nc>=1) { s.nStage='N1';   s.nodes=nc; }
+      // Grade
+      var gMS = seg.match(/grade\s*([1-3])/);
+      if (gMS) s.grade = parseInt(gMS[1]);
+      // Receptors
+      var ns2 = seg.replace(/\bneg\b/g,'-').replace(/\bpos\b/g,'+');
+      var tn = /triple\s*(-|neg)/.test(ns2)||(/er\s*-/.test(ns2)&&/pr\s*-/.test(ns2)&&/her2\s*-/.test(ns2));
+      var erS = !tn&&(/er\s*\+/.test(ns2)||(/\ber\b/.test(ns2)&&!/er\s*-/.test(ns2)));
+      var prS = !tn&&(/pr\s*\+/.test(ns2)||(/\bpr\b/.test(ns2)&&!/pr\s*-/.test(ns2)));
+      var h2S = !tn&&/her2\s*\+/.test(ns2);
+      var h2NS= tn||/her2\s*-/.test(ns2);
+      if (tn) s.recep='TNBC';
+      else if (erS&&prS&&h2S) s.recep='LumB';
+      else if (erS&&prS&&(h2NS||!h2S)) s.recep='LumA';
+      else if (!erS&&!prS&&h2S) s.recep='HER2e';
+      else if (erS&&!prS&&(h2NS||!h2S)) s.recep='ERp';
+      return s;
     }
 
-    if (rightMatch) bilat.L = parseTumorSeg(rightMatch[1], false); // right breast = diagram L
-    if (leftMatch)  bilat.R = parseTumorSeg(leftMatch[1],  true);  // left breast  = diagram R
+    var bilat = {L:null, R:null};
+    if (rightSeg) bilat.L = parseBilSeg(rightSeg, false); // patient right = diagram L
+    if (leftSeg)  bilat.R = parseBilSeg(leftSeg,  true);  // patient left  = diagram R
     window._bilateralTumors = bilat;
 
-    // T stage from largest
-    var bCms = [];
-    if (bilat.L && bilat.L.cm) bCms.push(bilat.L.cm);
-    if (bilat.R && bilat.R.cm) bCms.push(bilat.R.cm);
-    if (bCms.length) {
-      var maxCm = Math.max.apply(null, bCms);
-      var bT = maxCm <= 0.1 ? 'T1mi' : maxCm <= 0.5 ? 'T1a' : maxCm <= 1.0 ? 'T1b' : maxCm <= 2.0 ? 'T1c' : maxCm <= 5.0 ? 'T2' : 'T3';
-      sv('T', bT);
-      msgs.push('Bilateral - largest ' + maxCm + ' cm - ' + bT);
+    var sides = [];
+    if (bilat.L) sides.push(bilat.L);
+    if (bilat.R) sides.push(bilat.R);
+
+    // T: largest
+    var maxCm=0, maxT='';
+    for (var bi3=0;bi3<sides.length;bi3++) { if(sides[bi3].cm>maxCm){maxCm=sides[bi3].cm;maxT=sides[bi3].T;} }
+    if (maxT) {
+      sv('T', maxT);
+      msgs.push('Bilateral - largest ' + maxCm + ' cm - ' + maxT);
       var el2 = document.getElementById('size');
-      var bi2 = 1, bd2 = 99;
-      for (var i2 = 1; i2 < el2.options.length; i2++) {
-        var diff2 = Math.abs(parseFloat(el2.options[i2].value) - maxCm);
-        if (diff2 < bd2) { bd2 = diff2; bi2 = i2; }
-      }
+      var bi2=1, bd2=99;
+      for (var i2=1;i2<el2.options.length;i2++){var diff2=Math.abs(parseFloat(el2.options[i2].value)-maxCm);if(diff2<bd2){bd2=diff2;bi2=i2;}}
       el2.selectedIndex = bi2;
     }
+    // N: worst across both sides
+    var nOrder=['N0','N1mi','N1','N2a','N3a'];
+    var worstN='N0', worstNC=0;
+    for (var bi4=0;bi4<sides.length;bi4++){
+      var sn=sides[bi4].nStage||'N0';
+      if(nOrder.indexOf(sn)>nOrder.indexOf(worstN)){worstN=sn;worstNC=sides[bi4].nodes;}
+    }
+    sv('N', worstN); sv('nodecount', String(worstNC));
+    if (worstNC>0) msgs.push('Max ' + worstNC + ' nodes - ' + worstN);
+    // Receptors: first side with a value
+    for (var bi5=0;bi5<sides.length;bi5++){if(sides[bi5].recep){sv('recep',sides[bi5].recep);break;}}
+    // Grade: highest
+    var maxG=0;
+    for (var bi6=0;bi6<sides.length;bi6++){if(sides[bi6].grade>maxG)maxG=sides[bi6].grade;}
+    if (maxG) sv('grade','G'+maxG);
+    // Inflammatory / Paget's
+    for (var bi7=0;bi7<sides.length;bi7++){
+      if(sides[bi7].inflammatory){sv('T','T4d');sv('size','5.0');msgs.push('Inflammatory - T4d');}
+      if(sides[bi7].pagets){window._pagets=true;}
+    }
+    // M
+    if (/metasta/.test(txt)&&!/micro\s*metasta/.test(txt)) sv('M','M1'); else sv('M','M0');
+
+    document.getElementById('parseMsg').textContent = msgs.join(' | ');
+    return;
   }
 
   // MULTI-TUMOR DETECTION
